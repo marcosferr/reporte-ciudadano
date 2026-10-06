@@ -1,0 +1,88 @@
+1
+00:00:00,900 --> 00:00:10,500
+¿Viste un bache, un raudal o basura acumulada en tu barrio? Te muestro cómo reportarlo desde el celular, sin crear una cuenta.
+
+2
+00:00:11,550 --> 00:00:18,990
+Entrá a ciudadano.tereredev.com y tocá Reportar, abajo al centro.
+
+3
+00:00:18,990 --> 00:00:20,900
+No necesitás cuenta.
+
+4
+00:00:21,850 --> 00:00:23,790
+Primero elegí qué pasa.
+
+5
+00:00:23,790 --> 00:00:28,950
+Tocá la categoría que mejor lo describe; en este caso, Bache.
+
+6
+00:00:29,900 --> 00:00:31,790
+La app te ubica con el GPS del celular.
+
+7
+00:00:31,790 --> 00:00:36,350
+Mové el mapa hasta que el pin quede justo sobre el problema; Mi ubicación te vuelve a centrar.
+
+8
+00:00:37,300 --> 00:00:41,050
+Fijate que debajo del mapa aparece la ciudad.
+
+9
+00:00:41,050 --> 00:00:44,300
+Si está bien, tocá Confirmar ubicación.
+
+10
+00:00:45,250 --> 00:00:50,310
+Si alguien ya reportó algo parecido muy cerca, aparece acá.
+
+11
+00:00:50,310 --> 00:00:58,450
+Si es el mismo problema, tocá Es este y sumás tu confirmación: así el reporte tiene más fuerza.
+
+12
+00:00:59,400 --> 00:01:01,550
+Si es otro problema, seguí.
+
+13
+00:01:01,550 --> 00:01:04,980
+Tocá Agregar para sumar hasta cuatro fotos.
+
+14
+00:01:04,980 --> 00:01:08,650
+No te preocupes: las caras se difuminan solas.
+
+15
+00:01:09,600 --> 00:01:13,260
+Escribí un título corto que diga qué pasa y dónde.
+
+16
+00:01:13,260 --> 00:01:19,850
+En la descripción podés contar desde cuándo está así y alguna referencia para encontrarlo.
+
+17
+00:01:20,800 --> 00:01:27,850
+Revisá que no haya datos personales ni acusaciones a personas, y tocá Publicar reporte.
+
+18
+00:01:28,800 --> 00:01:29,330
+¡Listo!
+
+19
+00:01:29,330 --> 00:01:36,450
+Tu reporte ya está en el mapa, con un código de seguimiento, y queda guardado en este celular.
+
+20
+00:01:37,400 --> 00:01:40,010
+Para ver cómo va, entrá a Mis casos.
+
+21
+00:01:40,010 --> 00:01:46,400
+Ahí están los reportes que hiciste desde este celular, y podés buscar uno por su código.
+
+22
+00:01:47,400 --> 00:01:58,450
+Y eso es todo: tu reporte queda publicado para que cualquiera lo vea y lo confirme. Si querés avisos por correo cuando cambie de estado, iniciá sesión.
+

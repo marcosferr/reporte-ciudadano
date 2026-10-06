@@ -1,0 +1,61 @@
+{
+  "nombreRol": "Sin iniciar sesión",
+  "proceso": 0,
+  "titulo": "Publicar un reporte sin cuenta",
+  "subtitulo": "Elegís qué pasa, marcás dónde, sumás una foto y listo.",
+  "intro": "¿Viste un bache, un raudal o basura acumulada en tu barrio? Te muestro cómo reportarlo desde el celular, sin crear una cuenta.",
+  "pasos": [
+    {
+      "paso": 0,
+      "rotulo": "Botón Reportar",
+      "narracion": "Entrá a ciudadano punto tereré dev punto com y tocá Reportar, abajo al centro. No necesitás cuenta."
+    },
+    {
+      "paso": 1,
+      "rotulo": "Qué pasa",
+      "narracion": "Primero elegí qué pasa. Tocá la categoría que mejor lo describe; en este caso, Bache."
+    },
+    {
+      "paso": 2,
+      "rotulo": "Marcar el lugar",
+      "narracion": "La app te ubica con el GPS del celular. Mové el mapa hasta que el pin quede justo sobre el problema; Mi ubicación te vuelve a centrar."
+    },
+    {
+      "paso": 3,
+      "rotulo": "Confirmar ubicación",
+      "narracion": "Fijate que debajo del mapa aparece la ciudad. Si está bien, tocá Confirmar ubicación."
+    },
+    {
+      "paso": 4,
+      "rotulo": "Reportes cercanos",
+      "narracion": "Si alguien ya reportó algo parecido muy cerca, aparece acá. Si es el mismo problema, tocá Es este y sumás tu confirmación: así el reporte tiene más fuerza."
+    },
+    {
+      "paso": 5,
+      "rotulo": "Agregar fotos",
+      "narracion": "Si es otro problema, seguí. Tocá Agregar para sumar hasta cuatro fotos. No te preocupes: las caras se difuminan solas."
+    },
+    {
+      "paso": 6,
+      "rotulo": "Título y descripción",
+      "narracion": "Escribí un título corto que diga qué pasa y dónde. En la descripción podés contar desde cuándo está así y alguna referencia para encontrarlo."
+    },
+    {
+      "paso": 7,
+      "rotulo": "Publicar",
+      "narracion": "Revisá que no haya datos personales ni acusaciones a personas, y tocá Publicar reporte."
+    },
+    {
+      "paso": 8,
+      "rotulo": "Código de seguimiento",
+      "narracion": "¡Listo! Tu reporte ya está en el mapa, con un código de seguimiento, y queda guardado en este celular."
+    },
+    {
+      "paso": 9,
+      "rotulo": "Mis casos",
+      "narracion": "Para ver cómo va, entrá a Mis casos. Ahí están los reportes que hiciste desde este celular, y podés buscar uno por su código."
+    }
+  ],
+  "cierre": "Y eso es todo: tu reporte queda publicado para que cualquiera lo vea y lo confirme. Si querés avisos por correo cuando cambie de estado, iniciá sesión.",
+  "resumenFinal": "Reporte publicado con código de seguimiento"
+}

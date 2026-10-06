@@ -346,7 +346,7 @@ function LocationStep({ category, initial, homeBBox, onBack, onConfirm }: {
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full text-4xl drop-shadow" aria-hidden>
           <svg width="36" height="48" viewBox="0 0 36 48"><path d="M18 0C8 0 0 8 0 18c0 13 18 30 18 30s18-17 18-30C36 8 28 0 18 0z" fill={category.color} /><circle cx="18" cy="18" r="7" fill="#fff" /></svg>
         </div>
-        <button onClick={locate} className="btn-ghost absolute right-3 bottom-3 py-2 text-sm shadow" disabled={locating}>
+        <button onClick={locate} className="btn-ghost absolute bottom-3 left-3 py-2 text-sm shadow" disabled={locating}>
           {locating ? "Ubicando…" : "📍 Mi ubicación"}
         </button>
       </div>

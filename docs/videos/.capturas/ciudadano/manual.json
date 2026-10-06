@@ -1,0 +1,201 @@
+{
+  "rol": "ciudadano",
+  "nombreRol": "Sin iniciar sesión",
+  "usuario": "(sin cuenta)",
+  "resumen": "Cualquier vecino puede reportar un problema desde el celular sin crear una cuenta.",
+  "procesos": [
+    {
+      "titulo": "Publicar un reporte",
+      "descripcion": "Categoría, ubicación, fotos y detalles: el reporte queda en el mapa con un código de seguimiento.",
+      "pasos": [
+        {
+          "texto": "Desde el mapa, tocá **Reportar** en la barra de abajo. No hace falta tener cuenta.",
+          "imagenLimpia": "paso-01.png",
+          "cajas": [
+            {
+              "x": 156,
+              "y": 786,
+              "width": 78,
+              "height": 57
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Elegí la categoría que mejor describe el problema.",
+          "imagenLimpia": "paso-02.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 223,
+              "width": 173,
+              "height": 112
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "La app te ubica con el GPS. Mové el mapa hasta que el pin quede sobre el problema; **Mi ubicación** te vuelve a centrar.",
+          "imagenLimpia": "paso-03.png",
+          "cajas": [
+            {
+              "x": 177,
+              "y": 379,
+              "width": 36,
+              "height": 48
+            },
+            {
+              "x": 28,
+              "y": 611,
+              "width": 140,
+              "height": 36
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Revisá el barrio y la ciudad que aparecen debajo del mapa y tocá **Confirmar ubicación**.",
+          "imagenLimpia": "paso-04.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 667,
+              "width": 358,
+              "height": 20
+            },
+            {
+              "x": 16,
+              "y": 699,
+              "width": 358,
+              "height": 48
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Si alguien ya lo reportó muy cerca, aparece acá. Si es el mismo problema, tocá **Es este** para confirmarlo.",
+          "nota": "Confirmar un reporte existente le da más fuerza que crear uno repetido.",
+          "imagenLimpia": "paso-05.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 179,
+              "width": 358,
+              "height": 182
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Agregá hasta cuatro fotos con **📷 Agregar**.",
+          "nota": "Las caras se difuminan automáticamente y se borra la información oculta de la foto.",
+          "imagenLimpia": "paso-06.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 349,
+              "width": 358,
+              "height": 146
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Escribí un **Título** corto y, si querés, una **Descripción** con referencias.",
+          "imagenLimpia": "paso-07.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 397,
+              "width": 358,
+              "height": 50
+            },
+            {
+              "x": 16,
+              "y": 489,
+              "width": 358,
+              "height": 112
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Tocá **Publicar reporte**.",
+          "nota": "No incluyas datos personales ni acusaciones a personas.",
+          "imagenLimpia": "paso-08.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 396,
+              "width": 358,
+              "height": 52
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "Listo: el reporte queda publicado con un **código de seguimiento**.",
+          "imagenLimpia": "paso-09.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 241,
+              "width": 358,
+              "height": 32
+            },
+            {
+              "x": 16,
+              "y": 281,
+              "width": 358,
+              "height": 40
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        {
+          "texto": "En **Mis casos** encontrás los reportes hechos desde este celular, aunque no tengas cuenta.",
+          "imagenLimpia": "paso-10.png",
+          "cajas": [
+            {
+              "x": 16,
+              "y": 321,
+              "width": 358,
+              "height": 178
+            }
+          ],
+          "vista": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      ]
+    }
+  ]
+}
