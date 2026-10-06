@@ -13,3 +13,26 @@ export const formatDate = (d: Date | string) => dtf.format(new Date(d));
 export const formatDateTime = (d: Date | string) => dttf.format(new Date(d));
 export const formatNumber = (n: number) => new Intl.NumberFormat("es-PY").format(n);
 export const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+/**
+ * JSON para incrustar dentro de un <script> (p. ej. JSON-LD). JSON.stringify no escapa "<", así que un
+ * título con "</script>" cerraría la etiqueta y ejecutaría lo que sigue.
+ */
+export function safeJson(data: unknown): string {
+  return JSON.stringify(data)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+/** URL de una foto para el staff: la pública si está en public/, si no la del endpoint que exige permisos. */
+export function staffPhotoUrl(p: { id: string; s3_key_public: string | null }, thumb = false): string | null {
+  if (!p.s3_key_public) return null;
+  if (p.s3_key_public.startsWith("public/")) {
+    const key = thumb ? p.s3_key_public.replace(/\.jpg$/, "_t.jpg") : p.s3_key_public;
+    return `/media/${key.slice("public/".length)}`;
+  }
+  return `/api/admin/photos/${p.id}/image${thumb ? "?thumb=1" : ""}`;
+}

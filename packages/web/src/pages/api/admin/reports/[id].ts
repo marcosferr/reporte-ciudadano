@@ -4,6 +4,7 @@ import type { APIRoute } from "astro";
 import { z } from "zod";
 import { config } from "../../../../lib/server/config";
 import { handle, json, requireStaff } from "../../../../lib/server/http";
+import { setReportMediaVisible } from "../../../../lib/server/media";
 import { sendMail } from "../../../../lib/server/services";
 
 const schema = z.discriminatedUnion("action", [
@@ -33,6 +34,8 @@ export const POST: APIRoute = handle(async (ctx) => {
   }
   if (body.action === "visibility") {
     await setVisibility(id, body.visibility, actor, body.note);
+    // Ocultar retira las fotos de CloudFront (pueden ser el motivo, p. ej. datos personales); republicar las devuelve.
+    if (body.visibility !== "pending") await setReportMediaVisible(id, body.visibility === "published");
     return json({ ok: true });
   }
   await addComment(id, body.note, actor, body.public);

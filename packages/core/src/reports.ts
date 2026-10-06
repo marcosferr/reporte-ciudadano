@@ -78,7 +78,8 @@ const SELECT_REPORT = (s: ReturnType<typeof sql>) => s`
     r.confirmations_count, r.flags_count, r.duplicate_of, r.reporter_user_id,
     r.created_at, r.updated_at, r.resolved_at,
     (SELECT '/media/' || substr(p.s3_key_thumb, 8) FROM report_photos p
-      WHERE p.report_id = r.id AND p.status = 'approved' ORDER BY p.created_at LIMIT 1) AS cover_url
+      WHERE p.report_id = r.id AND p.status = 'approved' AND p.s3_key_thumb LIKE 'public/%'
+      ORDER BY p.created_at LIMIT 1) AS cover_url
   FROM reports r
   JOIN categories c ON c.id = r.category_id
   LEFT JOIN admin_areas d ON d.id = r.dept_id
@@ -205,10 +206,15 @@ export async function flagReport(reportId: string, reporter: string, reason: (ty
     const ins = await tx`INSERT INTO flags (report_id, reporter, reason, note)
       VALUES (${reportId}, ${reporter}, ${reason}, ${note ?? null}) ON CONFLICT DO NOTHING`;
     if (ins.count === 0) return;
-    const [r] = await tx<{ flags_count: number; visibility: string }[]>`
-      UPDATE reports SET flags_count = flags_count + 1 WHERE id = ${reportId} RETURNING flags_count, visibility`;
-    // Con varias denuncias el reporte pasa a revisión hasta que un moderador decida.
-    if (r.flags_count >= FLAGS_TO_HIDE && r.visibility === "published") {
+    const [r] = await tx<{ visibility: string }[]>`
+      UPDATE reports SET flags_count = flags_count + 1 WHERE id = ${reportId} RETURNING visibility`;
+    // Solo cuentan las denuncias que ningún moderador resolvió todavía: si un moderador ya lo republicó,
+    // hacen falta otras FLAGS_TO_HIDE denuncias nuevas. Y al menos una tiene que venir de una cuenta, para que
+    // nadie pueda ocultar reportes solo cambiando de IP.
+    const [pending] = await tx<{ total: number; from_accounts: number }[]>`
+      SELECT count(*)::int AS total, count(*) FILTER (WHERE reporter LIKE 'u:%')::int AS from_accounts
+      FROM flags WHERE report_id = ${reportId} AND NOT resolved`;
+    if (pending.total >= FLAGS_TO_HIDE && pending.from_accounts >= 1 && r.visibility === "published") {
       await tx`UPDATE reports SET visibility = 'pending' WHERE id = ${reportId}`;
       await tx`INSERT INTO report_events (report_id, type, note, actor_role, public)
         VALUES (${reportId}, 'visibility', 'En revisión por denuncias de la comunidad', 'sistema', false)`;
@@ -251,7 +257,8 @@ export async function changeStatus(
 export async function setVisibility(reportId: string, visibility: "published" | "pending" | "hidden", actor: Actor, note?: string) {
   await sql().begin(async (tx) => {
     await tx`UPDATE reports SET visibility = ${visibility} WHERE id = ${reportId}`;
-    if (visibility === "published") await tx`UPDATE flags SET resolved = true WHERE report_id = ${reportId}`;
+    // Publicar u ocultar es la decisión del moderador sobre las denuncias pendientes: salen de la cola.
+    if (visibility !== "pending") await tx`UPDATE flags SET resolved = true WHERE report_id = ${reportId}`;
     await tx`INSERT INTO report_events (report_id, type, note, actor_id, actor_role, public)
       VALUES (${reportId}, 'visibility', ${note ?? visibility}, ${actor.id}, ${actor.role}, false)`;
   });

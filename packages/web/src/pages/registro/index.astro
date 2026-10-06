@@ -5,7 +5,7 @@ import Notice from "../../components/auth/Notice.astro";
 import PasswordField from "../../components/auth/PasswordField.astro";
 import AuthLayout from "../../layouts/AuthLayout.astro";
 import { safeNext } from "../../lib/server/auth";
-import { signUp } from "../../lib/server/cognito";
+import { AuthError, signUp } from "../../lib/server/cognito";
 import { config } from "../../lib/server/config";
 import { allow, errorMessage, field, isEmail, keepNext, postedForm, qs, requireCaptcha } from "../../lib/server/forms";
 
@@ -28,7 +28,10 @@ try {
     } else {
       await allow(Astro, "signup", 5, 3600);
       await requireCaptcha(Astro, form);
-      await signUp(name, email, String(form.get("password") ?? ""));
+      // Si el correo ya tiene cuenta se responde igual que con uno nuevo: el formulario no revela quién está registrado.
+      await signUp(name, email, String(form.get("password") ?? "")).catch((err) => {
+        if (!(err instanceof AuthError && err.code === "UsernameExistsException")) throw err;
+      });
       return Astro.redirect(`/registro/confirmar${qs({ email, next: keepNext(next) })}`);
     }
     Astro.response.status = 400;

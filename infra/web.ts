@@ -1,6 +1,6 @@
 import { createAuth } from "./auth";
-import { ipSalt, turnstileSecret } from "./secrets";
-import type { createStorage } from "./storage";
+import { edgeSecret, internalSecrets, turnstileSecret } from "./secrets";
+import { mediaPermissions, type createStorage } from "./storage";
 
 export const DOMAIN = "ciudadano.tereredev.com";
 
@@ -21,6 +21,14 @@ export function createWeb(opts: {
 
   const router = new sst.aws.Router("Router", {
     domain: useDomain ? { name: DOMAIN, dns: false, cert: certArn } : undefined,
+    edge: {
+      viewerRequest: {
+        // La IP real del visitante (no falsificable, a diferencia de X-Forwarded-For) y la prueba de que el
+        // pedido pasó por CloudFront. Pisan cualquier valor que mande el cliente con esos nombres.
+        injection: $interpolate`event.request.headers["x-rc-viewer-ip"] = { value: event.viewer.ip };
+  event.request.headers["x-rc-edge"] = { value: "${edgeSecret.result}" };`,
+      },
+    },
   });
   router.routeBucket("/media", opts.media, { rewrite: { regex: "^/media/(.*)$", to: "/public/$1" } });
 
@@ -37,13 +45,26 @@ export function createWeb(opts: {
   const web = new sst.aws.Astro("Web", {
     path: "packages/web",
     router: { instance: router },
-    link: [opts.media, opts.db, auth.userPool, auth.client, turnstileSecret, ...(email ? [email] : [])],
+    link: [opts.db, auth.userPool, auth.client, turnstileSecret, internalSecrets, ...(email ? [email] : [])],
+    permissions: [
+      ...mediaPermissions(opts.media, [
+        // Firma las subidas del navegador a uploads/.
+        { actions: ["s3:PutObject"], prefixes: ["uploads/"] },
+        // Moderación: aprobar, rechazar, ocultar y republicar mueven o borran versiones procesadas.
+        { actions: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], prefixes: ["review/", "public/", "withheld/"] },
+      ]),
+      {
+        actions: ["cloudfront:CreateInvalidation"],
+        resources: [$interpolate`arn:aws:cloudfront::${aws.getCallerIdentityOutput({}).accountId}:distribution/${router.distributionID}`],
+      },
+    ],
     vpc: opts.vpc,
     environment: {
       SITE_URL: siteUrl,
       COGNITO_HOSTED_UI: auth.hostedUi,
       GOOGLE_LOGIN: auth.googleEnabled ? "1" : "",
-      IP_SALT: ipSalt.result,
+      MEDIA_BUCKET: opts.media.name,
+      CDN_DISTRIBUTION_ID: router.distributionID,
       PUBLIC_TURNSTILE_SITE_KEY: process.env.PUBLIC_TURNSTILE_SITE_KEY ?? "",
       MAIL_FROM: email ? `Reporte Ciudadano <avisos@${DOMAIN}>` : "",
     },

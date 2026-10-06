@@ -3,9 +3,17 @@ import { sql } from "./db";
 
 export const MAX_PHOTOS_PER_REPORT = 4;
 
-/** "public/abc/def.jpg" → "/media/abc/def.jpg" (ruta servida por CloudFront). */
+/** "public/abc/def.jpg" → "/media/abc/def.jpg" (ruta servida por CloudFront). Solo public/ es público. */
 export function mediaUrl(key: string | null): string | null {
-  return key ? `/media/${key.replace(/^public\//, "")}` : null;
+  return key?.startsWith("public/") ? `/media/${key.slice("public/".length)}` : null;
+}
+
+/** Prefijos del bucket para versiones procesadas (ver infra/storage.ts). */
+export type MediaPrefix = "review" | "public" | "withheld";
+
+/** "review/abc/def.jpg" → "public/abc/def.jpg". */
+export function withPrefix(key: string, prefix: MediaPrefix): string {
+  return key.replace(/^[a-z]+\//, `${prefix}/`);
 }
 
 export interface Photo {
@@ -69,6 +77,38 @@ export async function photoReviewQueue(): Promise<(Photo & { public_code: string
     WHERE p.status = 'review' ORDER BY p.created_at LIMIT 100` as any;
 }
 
-export async function setPhotoStatus(id: string, status: "approved" | "rejected") {
-  await sql()`UPDATE report_photos SET status = ${status} WHERE id = ${id}`;
+export async function getPhoto(id: string): Promise<Photo | undefined> {
+  const [row] = await sql()<Photo[]>`SELECT * FROM report_photos WHERE id = ${id}`;
+  return row;
+}
+
+/**
+ * Decisión de un moderador sobre una foto en revisión (solo esas: las rechazadas no tienen versión pública
+ * y las que se procesan todavía las pisa la moderación automática). Devuelve false si ya no estaba en revisión.
+ */
+export async function decideReviewedPhoto(
+  id: string,
+  decision: { status: "approved" | "rejected"; publicKey: string | null; thumbKey: string | null },
+  actor: { id: string; role: string },
+): Promise<boolean> {
+  return sql().begin(async (tx) => {
+    const [p] = await tx<{ report_id: string; kind: string }[]>`
+      UPDATE report_photos SET status = ${decision.status}, s3_key_public = ${decision.publicKey}, s3_key_thumb = ${decision.thumbKey}
+      WHERE id = ${id} AND status = 'review' RETURNING report_id, kind`;
+    if (!p) return false;
+    await tx`INSERT INTO report_events (report_id, type, note, actor_id, actor_role, public)
+      VALUES (${p.report_id}, 'photo', ${decision.status === "approved" ? (p.kind === "resolution" ? "Foto de la resolución" : null) : "Foto rechazada en moderación"},
+        ${actor.id}, ${actor.role}, ${decision.status === "approved"})`;
+    return true;
+  });
+}
+
+/** Fotos aprobadas de un reporte cuyas versiones están bajo `prefix` (para ocultarlas o volver a publicarlas). */
+export async function approvedPhotosUnder(reportId: string, prefix: MediaPrefix): Promise<Photo[]> {
+  return sql()<Photo[]>`
+    SELECT * FROM report_photos WHERE report_id = ${reportId} AND status = 'approved' AND s3_key_public LIKE ${prefix + "/%"}`;
+}
+
+export async function setPhotoKeys(id: string, publicKey: string | null, thumbKey: string | null) {
+  await sql()`UPDATE report_photos SET s3_key_public = ${publicKey}, s3_key_thumb = ${thumbKey} WHERE id = ${id}`;
 }

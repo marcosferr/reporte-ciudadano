@@ -115,7 +115,7 @@ describe("reportes", () => {
 
   it("pasa a revisión tras varias denuncias y vuelve a publicarse", async () => {
     const { report } = await reports.createReport({ category: "otros", title: "Reporte dudoso", description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
-    for (const who of ["a", "b", "a", "c"]) await reports.flagReport(report.id, who, "falso");
+    for (const who of ["a:1", "u:b", "a:1", "a:3"]) await reports.flagReport(report.id, who, "falso");
     let r = await reports.getReportById(report.id);
     expect(r!.flags_count).toBe(3);
     expect(r!.visibility).toBe("pending");
@@ -124,6 +124,31 @@ describe("reportes", () => {
     await reports.setVisibility(report.id, "published", admin, "Revisado");
     r = await reports.getReportById(report.id);
     expect(r!.visibility).toBe("published");
+    expect((await reports.flagQueue()).some((x) => x.report_id === report.id)).toBe(false);
+  });
+
+  it("las denuncias solo anónimas no ocultan el reporte, pero quedan para moderar", async () => {
+    const { report } = await reports.createReport({ category: "otros", title: "Reporte legítimo", description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
+    for (const who of ["a:1", "a:2", "a:3", "a:4"]) await reports.flagReport(report.id, who, "spam");
+    expect((await reports.getReportById(report.id))!.visibility).toBe("published");
+    expect((await reports.flagQueue()).some((x) => x.report_id === report.id)).toBe(true);
+  });
+
+  it("un reporte republicado necesita denuncias nuevas para volver a revisión", async () => {
+    const { report } = await reports.createReport({ category: "otros", title: "Reporte revisado", description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
+    for (const who of ["u:1", "u:2", "u:3"]) await reports.flagReport(report.id, who, "falso");
+    expect((await reports.getReportById(report.id))!.visibility).toBe("pending");
+    await reports.setVisibility(report.id, "published", admin, "Revisado");
+    await reports.flagReport(report.id, "u:4", "falso");
+    expect((await reports.getReportById(report.id))!.visibility).toBe("published");
+    for (const who of ["u:5", "a:6"]) await reports.flagReport(report.id, who, "falso");
+    expect((await reports.getReportById(report.id))!.visibility).toBe("pending");
+  });
+
+  it("ocultar un reporte también lo saca de la cola de denuncias", async () => {
+    const { report } = await reports.createReport({ category: "otros", title: "Reporte ofensivo", description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
+    await reports.flagReport(report.id, "u:1", "ofensivo");
+    await reports.setVisibility(report.id, "hidden", admin, "Ofensivo");
     expect((await reports.flagQueue()).some((x) => x.report_id === report.id)).toBe(false);
   });
 
@@ -178,6 +203,13 @@ describe("GIS", () => {
     expect(csv.split("\n")[0]).toContain("codigo");
     const geo = (await stats.exportGeoJSON()) as { features: unknown[] };
     expect(geo.features.length).toBe(sum.total);
+  });
+
+  it("el CSV neutraliza fórmulas en los títulos y deja las coordenadas como números", async () => {
+    await reports.createReport({ category: "vereda", title: '=HYPERLINK("http://x","clic")', description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
+    const line = (await stats.exportCSV({ category: "vereda" })).split("\n")[1];
+    expect(line).toContain(`"'=HYPERLINK(""http://x"",""clic"")"`);
+    expect(line).toMatch(/,-25\.3,-57\.6,/);
   });
 });
 

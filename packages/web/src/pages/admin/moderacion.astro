@@ -1,5 +1,6 @@
 ---
-import { mediaUrl, photoReviewQueue } from "@rc/core/photos";
+import { photoReviewQueue } from "@rc/core/photos";
+import { staffPhotoUrl } from "../../lib/format";
 import { flagQueue } from "@rc/core/reports";
 import AdminNav from "../../components/AdminNav.astro";
 import { FlagDecision, PhotoDecision } from "../../components/islands/ModerationActions";
@@ -34,7 +35,7 @@ const REASON: Record<string, string> = { falso: "Falso", ofensivo: "Ofensivo", d
         <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {photos.map((p) => (
             <li class="card overflow-hidden">
-              {p.s3_key_public && <img src={mediaUrl(p.s3_key_public)} alt="" class="aspect-square w-full object-cover blur-sm hover:blur-none" />}
+              {p.s3_key_public && <img src={staffPhotoUrl(p)} alt="" class="aspect-square w-full object-cover blur-sm hover:blur-none" />}
               <div class="space-y-1 p-2 text-xs">
                 <a href={`/admin/r/${p.public_code.toLowerCase()}`} class="font-semibold underline">{p.title}</a>
                 <p class="text-amber-700">{((p.moderation as any).labels ?? []).map((l: any) => l.name).join(", ")}</p>

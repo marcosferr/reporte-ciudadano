@@ -42,7 +42,8 @@ try {
   Astro.response.status = 400;
 }
 ---
-<AuthLayout title="Confirmá tu correo" heading="Revisá tu correo" lead={`Te enviamos un código de 6 dígitos a <strong class="text-ink">${maskEmail(email)}</strong>. Escribilo acá para activar tu cuenta.`}>
+<AuthLayout title="Confirmá tu correo" heading="Revisá tu correo">
+  <Fragment slot="lead">Te enviamos un código de 6 dígitos a <strong class="text-ink">{maskEmail(email)}</strong>. Escribilo acá para activar tu cuenta.</Fragment>
   {info && !error && <Notice tone="info">{info}</Notice>}
 
   <form method="post" class="space-y-5" data-auth>
@@ -53,7 +54,9 @@ try {
 
   <form method="post" class="mt-6 rounded-xl bg-sand-50 p-4 text-[0.9375rem] text-slate-600 ring-1 ring-sand-200" data-auth>
     <input type="hidden" name="next" value={next} />
-    <p>¿No te llegó? Revisá la carpeta de spam o promociones.</p>
+    <p>¿No te llegó? Revisá la carpeta de spam o promociones. Si ese correo ya tenía cuenta, no te enviamos código:
+      <a class="font-semibold text-brand-700 hover:underline" href={`/ingresar${qs({ email, next: keepNext(next) })}`}>ingresá</a> o
+      <a class="font-semibold text-brand-700 hover:underline" href={`/recuperar${qs({ email })}`}>recuperá tu contraseña</a>.</p>
     <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
       <button type="submit" name="action" value="resend" formnovalidate data-no-busy class="font-semibold text-brand-700 hover:underline">Reenviar código</button>
       <a class="font-semibold text-slate-600 hover:text-ink hover:underline" href={`/registro${qs({ email, next: keepNext(next) })}`}>Usar otro correo</a>

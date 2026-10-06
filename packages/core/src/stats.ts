@@ -151,8 +151,11 @@ export async function exportCSV(scope: Scope = {}, limit = 50000): Promise<strin
   const cols = ["codigo", "titulo", "categoria", "estado", "lat", "lng", "departamento", "distrito", "confirmaciones", "creado", "resuelto"];
   const esc = (v: unknown) => {
     if (v === null || v === undefined) return "";
-    const str = v instanceof Date ? v.toISOString() : String(v);
-    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    let str = v instanceof Date ? v.toISOString() : String(v);
+    // Excel y LibreOffice ejecutan como fórmula un texto que empieza con = + - @: se neutraliza con un apóstrofo.
+    // Solo en texto: las coordenadas son números negativos y tienen que quedar como números.
+    if (typeof v === "string" && /^[=+\-@\t\r]/.test(str)) str = `'${str}`;
+    return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
   };
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
 }

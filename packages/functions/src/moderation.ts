@@ -2,7 +2,6 @@ import { DetectFacesCommand, DetectModerationLabelsCommand, RekognitionClient } 
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { completePhoto, getPhotoByKey } from "@rc/core/photos";
 import type { S3Event } from "aws-lambda";
-import { Resource } from "sst";
 import { blurBoxes, decide, normalize, thumbnail } from "./image";
 
 const s3 = new S3Client({});
@@ -26,7 +25,7 @@ async function processUpload(key: string) {
   }
   if (photo.status !== "processing") return; // idempotente ante reintentos
 
-  const bucket = Resource.Media.name;
+  const bucket = process.env.MEDIA_BUCKET!;
   const obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   const original = Buffer.from(await obj.Body!.transformToByteArray());
 
@@ -57,8 +56,10 @@ async function processUpload(key: string) {
 
   const blurred = await blurBoxes(normalized.data, normalized.width, normalized.height, boxes);
   const thumb = await thumbnail(blurred);
-  const base = `public/${photo.report_id}/${photo.id}`;
-  const cache = "public, max-age=31536000, immutable";
+  // Lo que necesita revisión humana queda fuera de public/ (CloudFront no lo sirve) hasta que un moderador lo apruebe.
+  const base = `${status === "review" ? "review" : "public"}/${photo.report_id}/${photo.id}`;
+  // Sin "immutable": si un moderador retira la foto, se invalida CloudFront y el navegador la suelta en un día.
+  const cache = "public, max-age=86400, s-maxage=31536000";
   await Promise.all([
     s3.send(new PutObjectCommand({ Bucket: bucket, Key: `${base}.jpg`, Body: blurred, ContentType: "image/jpeg", CacheControl: cache })),
     s3.send(new PutObjectCommand({ Bucket: bucket, Key: `${base}_t.jpg`, Body: thumb, ContentType: "image/jpeg", CacheControl: cache })),

@@ -36,7 +36,8 @@ export async function requireCaptcha(ctx: Ctx, form: FormData): Promise<void> {
   }
 }
 
-export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+// Dominio solo con letras, números, puntos y guiones: además de validar, impide colar HTML en el correo.
+export const isEmail = (s: string) => s.length <= 254 && /^[^\s@<>"'`()\\,;:]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(s);
 
 /** Mensaje para mostrar a partir de cualquier error del formulario. */
 export const errorMessage = (err: unknown) =>

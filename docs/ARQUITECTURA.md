@@ -236,11 +236,11 @@ Definida en `sst.config.ts` + `infra/`. Cada archivo de `infra/` exporta una fun
 |---|---|
 | `vpc.ts` | VPC 10.20.0.0/16, 1 subred pública, 2 privadas (RDS exige 2 AZ), instancia fck-nat t4g.nano (también bastión SSM), endpoint de S3 |
 | `database.ts` | RDS Postgres 17 t4g.micro 20 GB, backups 7 días, protección contra borrado en producción; Lambda migradora |
-| `storage.ts` | Bucket `Media` con `uploads/` (privado, expira a 90 días) y `public/` |
+| `storage.ts` | Bucket `Media` con `uploads/` (originales, expiran a 90 días), `review/`, `withheld/` (privados) y `public/` (servido) |
 | `moderation.ts` | Notificación S3 → Lambda de moderación con permisos de Rekognition |
 | `auth.ts` | User pool, cliente, grupos, Google opcional, marca del Hosted UI, trigger de correos |
 | `web.ts` | Router de CloudFront, app Astro, SES opcional |
-| `secrets.ts` | Secreto de Turnstile y sal para IPs |
+| `secrets.ts` | Secreto de Turnstile, sal para IPs y secreto de CloudFront (vinculados, no en variables de entorno) |
 | `budget.ts` | Alerta de AWS Budgets (solo producción, con `ALERT_EMAIL`) |
 
 **Stages**: `production` retiene y protege los recursos (`removal: retain`, `protect: true`). Cualquier otro stage se borra completo con `sst remove`. En `sst dev` no se crea VPC ni RDS: se usa la base local.
@@ -260,7 +260,13 @@ Se alerta por correo al 80 % real o 100 % proyectado de USD 30.
 ## Seguridad
 
 - Base de datos en subred privada, sin acceso público; se entra por SSM a través del NAT.
+- **IP del visitante**: la CloudFront Function del router agrega `x-rc-viewer-ip` (de `event.viewer.ip`) y un secreto compartido (`x-rc-edge`). La web solo confía en esa IP si el secreto coincide; nunca usa `X-Forwarded-For`. Lo que llega directo a la URL de la Lambda cuenta como `0.0.0.0` y comparte un solo cupo.
 - Rate limiting en Postgres por usuario o hash de IP (8 reportes/hora anónimo, 20 con cuenta).
+- **Denuncias**: una por cuenta o por IP. Un reporte pasa a revisión solo con 3 denuncias sin resolver y al menos una de alguien con cuenta; al moderarlo, las denuncias se resuelven.
+- **Fotos**: solo `public/` es legible por CloudFront, y solo desde distribuciones de esta cuenta (`aws:SourceAccount`). Las que piden revisión humana van a `review/` (el staff las ve por `/api/admin/photos/{id}/image`); ocultar un reporte mueve sus fotos a `withheld/` e invalida CloudFront. Las Lambdas tienen permisos por prefijo, no `s3:*`.
+- **Sesión**: cerrar sesión es un POST que revoca el refresh token en Cognito y envía `Clear-Site-Data: "cache"`. El service worker solo guarda versiones de páginas pedidas sin cookies y nunca respuestas `private`/`no-store`. Una respuesta que fija cookies nunca se cachea en CloudFront.
+- **HTML**: nada de `set:html` con datos de usuarios; el JSON-LD se serializa con `safeJson` (escapa `<`, `>` y `&`).
+- **Exportación CSV**: los textos que empiezan con `= + - @` se neutralizan para que Excel no los ejecute como fórmulas.
 - Captcha Cloudflare Turnstile para reportes anónimos (opcional, se activa con el secreto).
 - Moderación automática de imágenes + revisión humana para casos dudosos.
 - Validación de entrada con Zod en todos los endpoints.

@@ -84,7 +84,20 @@ async function tokenRequest(params: Record<string, string>) {
 }
 
 const b64url = (b: Buffer) => b.toString("base64url");
-export const safeNext = (next: string | null | undefined) => (next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
+/**
+ * Destino interno para volver después del login. Los navegadores tratan "/\\evil.com" como "//evil.com",
+ * así que se resuelve contra el sitio y se exige el mismo origen.
+ */
+export function safeNext(next: string | null | undefined): string {
+  if (!next || !next.startsWith("/") || /[\\\u0000-\u001f]/.test(next)) return "/";
+  try {
+    const base = new URL(config.siteUrl);
+    const url = new URL(next, base);
+    return url.origin === base.origin ? url.pathname + url.search + url.hash : "/";
+  } catch {
+    return "/";
+  }
+}
 
 export function startSession(cookies: AstroCookies, tokens: Tokens) {
   cookies.set(ID_COOKIE, tokens.id_token, cookieOpts(3600));
@@ -149,9 +162,18 @@ export function devLogin(cookies: AstroCookies, who: "admin" | "vecino") {
   if (config.devLogin) cookies.set(DEV_COOKIE, who, cookieOpts(86400));
 }
 
-export function logout(cookies: AstroCookies): string {
+export async function logout(cookies: AstroCookies): Promise<string> {
+  const refresh = cookies.get(REFRESH_COOKIE)?.value;
   for (const c of [ID_COOKIE, REFRESH_COOKIE, DEV_COOKIE]) cookies.delete(c, { path: "/" });
   const c = config.cognito;
   if (!c) return "/";
+  // Revoca el refresh token: borrar la cookie no alcanza si el token se filtró antes.
+  if (refresh) {
+    await fetch(`${c.hostedUi}/oauth2/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: c.clientId, token: refresh }),
+    }).catch((err) => console.error("no se pudo revocar el refresh token", err));
+  }
   return `${c.hostedUi}/logout?${new URLSearchParams({ client_id: c.clientId, logout_uri: `${config.siteUrl}/` })}`;
 }

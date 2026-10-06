@@ -1,5 +1,6 @@
 ---
-import { listPhotos, mediaUrl } from "@rc/core/photos";
+import { listPhotos } from "@rc/core/photos";
+import { staffPhotoUrl } from "../../../lib/format";
 import { codeFromParam, getReportByCode, listEvents, reportPath } from "@rc/core/reports";
 import { nextStatuses, STATUS_LABEL } from "@rc/core/status";
 import AdminNav from "../../../components/AdminNav.astro";
@@ -29,7 +30,7 @@ const [photos, events] = await Promise.all([listPhotos(report.id, true), listEve
         <div class="grid grid-cols-2 gap-3">
           {photos.map((p) => (
             <figure class="card overflow-hidden">
-              {p.s3_key_public ? <img src={mediaUrl(p.s3_key_public)} alt="" class="aspect-square w-full object-cover" /> : <div class="flex aspect-square items-center justify-center bg-slate-100 text-sm text-slate-500">{p.status === "processing" ? "Procesando…" : "Sin versión pública"}</div>}
+              {p.s3_key_public ? <img src={staffPhotoUrl(p)} alt="" class="aspect-square w-full object-cover" /> : <div class="flex aspect-square items-center justify-center bg-slate-100 text-sm text-slate-500">{p.status === "processing" ? "Procesando…" : "Sin versión pública"}</div>}
               <figcaption class="space-y-1 p-2 text-xs">
                 <p><b>{p.kind === "resolution" ? "Resolución" : "Reporte"}</b> · {p.status} · caras: {(p.moderation as any).faces ?? "—"}</p>
                 {(p.moderation as any).labels?.length > 0 && <p class="text-amber-700">{(p.moderation as any).labels.map((l: any) => `${l.name} ${l.confidence}%`).join(", ")}</p>}

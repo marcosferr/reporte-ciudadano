@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { safeJson } from "../lib/format";
 import { config } from "../lib/server/config";
 
 interface Props {
@@ -65,7 +66,7 @@ const nav = [
     <meta property="og:image" content={ogImage} />
     <meta name="twitter:card" content="summary_large_image" />
 
-    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+    {jsonLd && <script type="application/ld+json" set:html={safeJson(jsonLd)} />}
     <slot name="head" />
   </head>
   <body class:list={[fullscreen ? "h-dvh overflow-hidden" : "min-h-dvh pb-20 md:pb-0"]}>
@@ -93,7 +94,9 @@ const nav = [
                 <a class="block rounded-lg px-2 py-2 hover:bg-slate-50" href="/mis-reportes">Mis reportes</a>
                 <a class="block rounded-lg px-2 py-2 hover:bg-slate-50" href="/mis-reportes#ciudad">Mi ciudad</a>
                 {user.isStaff && <a class="block rounded-lg px-2 py-2 hover:bg-slate-50" href="/admin">Panel de gestión</a>}
-                <a class="block rounded-lg px-2 py-2 text-alert-600 hover:bg-slate-50" href="/auth/logout">Salir</a>
+                <form method="post" action="/auth/logout">
+                  <button type="submit" class="block w-full rounded-lg px-2 py-2 text-left text-alert-600 hover:bg-slate-50">Salir</button>
+                </form>
               </div>
             </details>
           ) : (

@@ -4,6 +4,7 @@ import "../styles/global.css";
 interface Props {
   title: string;
   heading: string;
+  /** Texto plano. Si hace falta resaltar algo (p. ej. el correo), usar el slot "lead": nunca HTML armado a mano. */
   lead?: string;
 }
 
@@ -98,7 +99,9 @@ const { title, heading, lead } = Astro.props;
 
         <div class="mx-auto flex w-full max-w-[26rem] flex-1 flex-col justify-center py-10">
           <h1 class="text-[2rem] leading-tight font-extrabold text-ink">{heading}</h1>
-          {lead && <p class="mt-2 text-[1.0625rem] leading-relaxed text-slate-600" set:html={lead} />}
+          {(lead || Astro.slots.has("lead")) && (
+            <p class="mt-2 text-[1.0625rem] leading-relaxed text-slate-600"><slot name="lead">{lead}</slot></p>
+          )}
           <div class="mt-8">
             <slot />
           </div>

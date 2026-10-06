@@ -26,7 +26,8 @@ try {
   Astro.response.status = 400;
 }
 ---
-<AuthLayout title="Elegí tu contraseña" heading="Elegí tu contraseña" lead={`Es tu primer ingreso como <strong class="text-ink">${maskEmail(challenge.email)}</strong>. Reemplazá la contraseña temporal por una que solo vos conozcas.`}>
+<AuthLayout title="Elegí tu contraseña" heading="Elegí tu contraseña">
+  <Fragment slot="lead">Es tu primer ingreso como <strong class="text-ink">{maskEmail(challenge.email)}</strong>. Reemplazá la contraseña temporal por una que solo vos conozcas.</Fragment>
   {error && <Notice tone="error">{error}</Notice>}
   <form method="post" class="space-y-5" data-auth>
     <input type="hidden" name="next" value={next} />

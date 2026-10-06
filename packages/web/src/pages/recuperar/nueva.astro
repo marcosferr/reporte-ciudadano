@@ -41,7 +41,8 @@ try {
   Astro.response.status = 400;
 }
 ---
-<AuthLayout title="Nueva contraseña" heading="Creá una nueva contraseña" lead={`Si hay una cuenta con <strong class="text-ink">${maskEmail(email)}</strong>, te llegó un código de 6 dígitos. Escribilo y elegí tu nueva contraseña.`}>
+<AuthLayout title="Nueva contraseña" heading="Creá una nueva contraseña">
+  <Fragment slot="lead">Si hay una cuenta con <strong class="text-ink">{maskEmail(email)}</strong>, te llegó un código de 6 dígitos. Escribilo y elegí tu nueva contraseña.</Fragment>
   {info && !error && <Notice tone="info">{info}</Notice>}
   {error && <Notice tone="error">{error}</Notice>}
 
