@@ -17,7 +17,7 @@
     "@aws-sdk/s3-presigned-post": "^3.1141.0",
     "@rc/core": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
-    "astro": "~5.18.2",
+    "astro": "~7.2.8",
     "astro-sst": "^3.1.4",
     "aws-jwt-verify": "^5.2.1",
     "exifr": "^7.1.3",
