@@ -20,7 +20,7 @@ Plataforma abierta para reportar y dar seguimiento a problemas urbanos de Paragu
 | Capa | Tecnología |
 |---|---|
 | Infraestructura | [SST v4](https://sst.dev) (Pulumi) en AWS `us-east-1` |
-| Web | Astro 5 SSR en Lambda + islas React 19, Tailwind 4, MapLibre GL 5 |
+| Web | Astro 7 SSR en Lambda + islas React 19, Tailwind 4, MapLibre GL 6 |
 | Base de datos | PostgreSQL 17 + PostGIS (RDS t4g.micro) |
 | Archivos | S3 + CloudFront |
 | Moderación | Lambda + Amazon Rekognition + sharp |

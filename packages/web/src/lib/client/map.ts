@@ -1,4 +1,8 @@
-import type { Map as MLMap } from "maplibre-gl";
+import { setWorkerUrl, type Map as MLMap } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+
+// MapLibre 6 es solo ESM y con bundlers hay que indicarle la URL de su worker (Vite la empaqueta aparte).
+setWorkerUrl(workerUrl);
 
 // OpenFreeMap: teselas vectoriales de OSM gratuitas y sin API key.
 export const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";

@@ -74,7 +74,7 @@ Los errores de negocio se lanzan como `DomainError(code, message, status)`; la w
 
 ### `packages/web`
 
-Astro 5 en modo `server` con el adaptador `astro-sst`. Las páginas se renderizan en el servidor; la interactividad va en **islas React** (`src/components/islands/`): mapa, asistente de reporte, consultas GIS, panel de admin.
+Astro 7 en modo `server` con el adaptador `astro-sst` (parcheado con `pnpm patch` en `patches/` para soportar Astro 6+ hasta que salga la versión oficial). Las páginas se renderizan en el servidor; la interactividad va en **islas React** (`src/components/islands/`): mapa, asistente de reporte, consultas GIS, panel de admin.
 
 ```
 src/pages/            rutas (Astro y endpoints .ts)

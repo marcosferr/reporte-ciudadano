@@ -15,4 +15,7 @@ export default defineConfig({
   },
   security: { checkOrigin: true },
   devToolbar: { enabled: false },
+  // Astro 7 cambió el default a "jsx" (quita espacios entre elementos inline con saltos de línea);
+  // mantenemos el comportamiento de Astro 5 para no alterar el texto de las páginas.
+  compressHTML: true,
 });

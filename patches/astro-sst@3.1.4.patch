@@ -1,0 +1,195 @@
+diff --git a/dist/adapter.js b/dist/adapter.js
+index 20b62ecc1146ff9234630c394f8691ceb43f6af5..10e02b3919da3f5d16105ba263dc4b916cd90b47 100644
+--- a/dist/adapter.js
++++ b/dist/adapter.js
+@@ -7,8 +7,8 @@ export default function createIntegration(entrypointParameters = {
+     responseMode: "buffer",
+ }) {
+     debug("astroVersion", ASTRO_PACKAGE.version);
+-    if (astroMajorVersion < 5) {
+-        throw new Error("astro-sst requires Astro 5 or newer. Please upgrade your Astro app. Alternatively, use v2 of astro-sst by pinning to `astro-sst@two`.");
++    if (astroMajorVersion < 6) {
++        throw new Error("This patched astro-sst requires Astro 6 or newer.");
+     }
+     return {
+         name: PACKAGE_NAME,
+@@ -51,9 +51,8 @@ export default function createIntegration(entrypointParameters = {
+                 BuildMeta.setBuildOutput(buildOutput);
+                 setAdapter({
+                     name: PACKAGE_NAME,
+-                    serverEntrypoint: `${PACKAGE_NAME}/entrypoint`,
+-                    args: { responseMode: entrypointParameters.responseMode },
+-                    exports: ["handler"],
++                    entrypointResolution: "auto",
++                    serverEntrypoint: `${PACKAGE_NAME}/entrypoint/${entrypointParameters.responseMode}`,
+                     adapterFeatures: {
+                         edgeMiddleware: false,
+                         buildOutput: buildOutput,
+diff --git a/dist/entrypoint/buffer.js b/dist/entrypoint/buffer.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f6591292ba3dfef45dc509b18dd420b3a8341f26
+--- /dev/null
++++ b/dist/entrypoint/buffer.js
+@@ -0,0 +1,52 @@
++// Port de https://github.com/anomalyco/astro-sst/pull/27 (soporte Astro 6+).
++import { createApp } from "astro/app/entrypoint";
++import fs from "fs/promises";
++import { convertFrom, convertTo } from "../lib/event-mapper.js";
++import { debug } from "../lib/logger.js";
++import { build404Url, createRequest, existsAsync } from "../lib/entrypoint-utils.js";
++const app = createApp();
++export async function handler(event) {
++    debug("event", event);
++    const internalEvent = convertFrom(event);
++    let request = createRequest(internalEvent);
++    let routeData = app.match(request);
++    if (!routeData) {
++        // handle prerendered 404
++        if (await existsAsync("404.html")) {
++            return convertTo({
++                type: internalEvent.type,
++                response: new Response(await fs.readFile("404.html", "utf-8"), {
++                    status: 404,
++                    headers: {
++                        "Content-Type": "text/html",
++                    },
++                }),
++            });
++        }
++        // handle server-side 404
++        request = createRequest({
++            ...internalEvent,
++            url: build404Url(internalEvent.url),
++        });
++        routeData = app.match(request);
++        if (!routeData) {
++            return convertTo({
++                type: internalEvent.type,
++                response: new Response("Not found", { status: 404 }),
++            });
++        }
++    }
++    // Process request
++    const response = await app.render(request, {
++        routeData,
++        clientAddress: internalEvent.headers["x-forwarded-for"] || internalEvent.remoteAddress,
++    });
++    // Buffer response back to Cloudfront
++    const convertedResponse = await convertTo({
++        type: internalEvent.type,
++        response,
++        cookies: Array.from(app.setCookieHeaders(response)),
++    });
++    debug("response", convertedResponse);
++    return convertedResponse;
++}
+diff --git a/dist/entrypoint/stream.js b/dist/entrypoint/stream.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3859160bd8b33ff9a0634f91607522a2d9756768
+--- /dev/null
++++ b/dist/entrypoint/stream.js
+@@ -0,0 +1,53 @@
++// Port de https://github.com/anomalyco/astro-sst/pull/27 (soporte Astro 6+).
++import { createApp } from "astro/app/entrypoint";
++import fs from "fs/promises";
++import { convertFrom, convertTo } from "../lib/event-mapper.js";
++import { debug } from "../lib/logger.js";
++import { build404Url, createRequest, existsAsync } from "../lib/entrypoint-utils.js";
++function streamError(statusCode, error, responseStream) {
++    console.error(error);
++    responseStream = awslambda.HttpResponseStream.from(responseStream, {
++        statusCode,
++        headers: {
++            "Content-Type": "text/html",
++        },
++    });
++    responseStream.write(error.toString());
++    responseStream.end();
++}
++const app = createApp();
++async function streamHandler(event, responseStream) {
++    debug("event", event);
++    const internalEvent = convertFrom(event);
++    let request = createRequest(internalEvent);
++    let routeData = app.match(request);
++    if (!routeData) {
++        // handle prerendered 404
++        if (await existsAsync("404.html")) {
++            return streamError(404, await fs.readFile("404.html", "utf-8"), responseStream);
++        }
++        // handle server-side 404
++        request = createRequest({
++            ...internalEvent,
++            url: build404Url(internalEvent.url),
++        });
++        routeData = app.match(request);
++        if (!routeData) {
++            return streamError(404, "Not found", responseStream);
++        }
++    }
++    const response = await app.render(request, {
++        routeData,
++        clientAddress: internalEvent.headers["x-forwarded-for"] || internalEvent.remoteAddress,
++    });
++    // Stream response back to Cloudfront
++    const convertedResponse = await convertTo({
++        type: internalEvent.type,
++        response,
++        responseStream,
++        cookies: Array.from(app.setCookieHeaders(response)),
++    });
++    debug("response", convertedResponse);
++}
++// https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html
++export const handler = awslambda.streamifyResponse(streamHandler);
+diff --git a/dist/entrypoint.d.ts b/dist/entrypoint.d.ts
+deleted file mode 100644
+index 56f8303cc0c9ab45a578efa84b2755f754d3b59c..0000000000000000000000000000000000000000
+diff --git a/dist/entrypoint.js b/dist/entrypoint.js
+deleted file mode 100644
+index dedb206e4f16572da83ecc736912c51f685d0d76..0000000000000000000000000000000000000000
+diff --git a/dist/lib/entrypoint-utils.js b/dist/lib/entrypoint-utils.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..779527b3eaab1984d9b9836a6bdd5315d43b3bef
+--- /dev/null
++++ b/dist/lib/entrypoint-utils.js
+@@ -0,0 +1,25 @@
++import fs from "fs/promises";
++export function build404Url(url) {
++    const url404 = new URL(url);
++    url404.pathname = "/404";
++    url404.search = "";
++    url404.hash = "";
++    return url404.toString();
++}
++export async function existsAsync(input) {
++    return fs
++        .access(input)
++        .then(() => true)
++        .catch(() => false);
++}
++export function createRequest(internalEvent) {
++    const requestUrl = internalEvent.url;
++    const requestProps = {
++        method: internalEvent.method,
++        headers: internalEvent.headers,
++        body: ["GET", "HEAD"].includes(internalEvent.method)
++            ? undefined
++            : internalEvent.body,
++    };
++    return new Request(requestUrl, requestProps);
++}
+diff --git a/package.json b/package.json
+index 274ab59b5d00b9ca80cba9b4c94ba448a0ec01f3..7547ea462391927d548123c6a03775c17773a845 100644
+--- a/package.json
++++ b/package.json
+@@ -20,7 +20,8 @@
+   "bugs": "https://github.com/sst/astro-sst/issues",
+   "exports": {
+     ".": "./dist/adapter.js",
+-    "./entrypoint": "./dist/entrypoint.js",
++    "./entrypoint/buffer": "./dist/entrypoint/buffer.js",
++    "./entrypoint/stream": "./dist/entrypoint/stream.js",
+     "./build-meta": "./dist/lib/build-meta.js",
+     "./package.json": "./package.json"
+   },
