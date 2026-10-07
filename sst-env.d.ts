@@ -27,6 +27,11 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Function"
     }
+    "Internal": {
+      "edgeSecret": string
+      "ipSalt": string
+      "type": "sst.sst.Linkable"
+    }
     "Media": {
       "name": string
       "type": "sst.aws.Bucket"

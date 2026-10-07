@@ -10,7 +10,10 @@ export const GET: APIRoute = async (ctx) => {
   return new Response(tile.length ? new Uint8Array(tile) : null, {
     status: tile.length ? 200 : 204,
     headers: {
-      "Content-Type": "application/vnd.mapbox-vector-tile",
+      // No "application/vnd.mapbox-vector-tile": astro-sst solo codifica en base64 los tipos de su lista de
+      // binarios y trata el resto como texto UTF-8, lo que rompe el protobuf en Lambda (en `pnpm dev` no se nota).
+      // MapLibre no mira este header para decodificar el tile.
+      "Content-Type": "application/octet-stream",
       "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
       "Access-Control-Allow-Origin": "*",
     },
