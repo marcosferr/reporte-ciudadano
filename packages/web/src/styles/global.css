@@ -179,6 +179,11 @@ h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02e
 
 /* El mapa base conserva sus colores; los popups llevan contenido de la web y siguen el tema. */
 .maplibregl-popup-content { @apply rounded-xl! p-0! shadow-lg! overflow-hidden bg-raised! text-fg; }
+/* La flechita es un triángulo de bordes con fondo transparente, así que el lado que no se colorea se ve
+   blanco. MapLibre usa el ancla `center` cuando el popup no toca un borde, y esa no está en ninguna regla
+   de abajo, así que la flechita quedaba blanca en modo oscuro. El fondo cubre las nueve anclas y los
+   bordes siguen orientando el triángulo. */
+.maplibregl-popup-tip { background: var(--color-raised); }
 .maplibregl-popup-anchor-top .maplibregl-popup-tip,
 .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
 .maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--color-raised); }
