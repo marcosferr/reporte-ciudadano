@@ -2,12 +2,12 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { STATUS_LABEL, type Status } from "@rc/core/status";
-import { ApiError, api, submitReport, type Created } from "../../lib/client/api";
+import { ApiError, api } from "../../lib/client/api";
 import { compressImage } from "../../lib/client/image";
 import { ASU_BOUNDS, BASEMAP_STYLE, collapseAttribution } from "../../lib/client/map";
-import { queueReport } from "../../lib/client/outbox";
-import { resolvedTheme } from "../../lib/client/theme";
+import { newOutboxItem, queueReport, sendReport, type SentReport } from "../../lib/client/outbox";
 import { timeAgo } from "../../lib/format";
+import Turnstile from "./Turnstile";
 
 interface Category {
   slug: string; name: string; description: string | null; icon: string; color: string; accepting: boolean;
@@ -20,6 +20,9 @@ interface Photo { blob: Blob; url: string; gps?: { lat: number; lng: number } }
 const PHOTO_LOCATION_MIN_M = 30;
 
 type Step = "category" | "location" | "details" | "done";
+type Outcome =
+  | { queued: true }
+  | { queued: false; report: SentReport; photosUploaded: number; photosSkipped: number; photosPending: boolean };
 
 export default function ReportWizard({ categories, turnstileSiteKey, loggedIn, homeBBox }: {
   categories: Category[]; turnstileSiteKey: string; loggedIn: boolean; homeBBox?: [number, number, number, number];
@@ -35,7 +38,8 @@ export default function ReportWizard({ categories, turnstileSiteKey, loggedIn, h
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [busy, setBusy] = useState<string>("");
   const [err, setErr] = useState("");
-  const [created, setCreated] = useState<Created & { queued?: boolean }>();
+  const [outcome, setOutcome] = useState<Outcome>();
+  const online = useOnline();
   const [captcha, setCaptcha] = useState<string>();
 
   // Preselección por URL: /reportar?categoria=bache
@@ -75,25 +79,28 @@ export default function ReportWizard({ categories, turnstileSiteKey, loggedIn, h
   async function submit() {
     if (!category || !point) return;
     setErr("");
-    const data = { category: category.slug, title: title.trim(), description: description.trim(), lat: point.lat, lng: point.lng, address: place || undefined, extra, turnstile: captcha };
-    if (!navigator.onLine) {
-      await queueReport(data, photos.map((p) => p.blob));
-      setCreated({ queued: true } as any);
+    const item = newOutboxItem(
+      { category: category.slug, title: title.trim(), description: description.trim(), lat: point.lat, lng: point.lng, address: place || undefined, extra },
+      photos.map((p) => p.blob),
+    );
+    // Se guarda con lo que ya se hizo: si el reporte se creó, la cola solo sube las fotos que faltan.
+    const queue = async () => {
+      await queueReport(item);
+      setOutcome(item.created
+        ? { queued: false, report: item.created, photosUploaded: item.uploaded ?? 0, photosSkipped: 0, photosPending: true }
+        : { queued: true });
       setStep("done");
-      return;
-    }
+    };
+    if (!navigator.onLine) return queue();
     try {
-      const res = await submitReport(data, photos.map((p) => p.blob), setBusy);
-      setCreated(res);
+      const res = await sendReport(item, { turnstile: captcha, onProgress: setBusy });
+      setOutcome({ queued: false, ...res, photosPending: false });
       setStep("done");
     } catch (e) {
-      if (e instanceof ApiError) setErr(e.message);
-      else {
-        // Sin señal a mitad del envío: se guarda para reintentar.
-        await queueReport(data, photos.map((p) => p.blob));
-        setCreated({ queued: true } as any);
-        setStep("done");
-      }
+      // Un rechazo antes de crear el reporte se muestra; cualquier otra falla (señal que se corta, fotos que no
+      // suben) se guarda en la cola, que sigue desde donde quedó.
+      if (e instanceof ApiError && !item.created) setErr(e.message);
+      else await queue();
     } finally {
       setBusy("");
     }
@@ -227,7 +234,7 @@ export default function ReportWizard({ categories, turnstileSiteKey, loggedIn, h
           {!loggedIn && turnstileSiteKey && <Turnstile siteKey={turnstileSiteKey} onToken={setCaptcha} />}
 
           {err && <p className="rounded-xl bg-danger-soft p-3 text-sm text-danger" role="alert">{err}</p>}
-          <button className="btn-alert w-full text-lg" disabled={!!busy || title.trim().length < 5 || (!loggedIn && !!turnstileSiteKey && !captcha)} onClick={submit}>
+          <button className="btn-alert w-full text-lg" disabled={!!busy || title.trim().length < 5 || (!loggedIn && !!turnstileSiteKey && !captcha && online)} onClick={submit}>
             {busy || "Publicar reporte"}
           </button>
           <p className="text-center text-xs text-fg-subtle">
@@ -236,25 +243,35 @@ export default function ReportWizard({ categories, turnstileSiteKey, loggedIn, h
         </section>
       )}
 
-      {step === "done" && created && (
+      {step === "done" && outcome && (
         <section className="py-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-3xl">✓</div>
-          {created.queued ? (
+          {outcome.queued ? (
             <>
               <h1 className="text-2xl font-extrabold">Reporte guardado</h1>
-              <p className="mt-2 text-fg-muted">No hay conexión ahora. Lo vamos a enviar automáticamente cuando vuelvas a tener señal y abras la app.</p>
+              {/* Sin conexión la página puede venir de la caché, sin sesión: si hace falta el captcha, lo dice el servidor al enviar. */}
+              <p className="mt-2 text-fg-muted">
+                No hay conexión ahora. Lo vamos a enviar cuando vuelvas a tener señal y abras la app. Si hace falta confirmar
+                que sos una persona, te lo pedimos en <a className="underline" href="/mis-reportes">Mis casos</a>.
+              </p>
             </>
           ) : (
             <>
               <h1 className="text-2xl font-extrabold">¡Gracias por reportar!</h1>
               <p className="mt-2 text-fg-muted">Tu código de seguimiento es</p>
-              <p className="my-2 font-mono text-2xl font-bold tracking-wider text-accent">{created.report.code}</p>
-              {created.photosUploaded > 0 && <p className="text-sm text-fg-subtle">Las fotos aparecen en unos segundos, cuando terminan de procesarse.</p>}
+              <p className="my-2 font-mono text-2xl font-bold tracking-wider text-accent">{outcome.report.code}</p>
+              {outcome.photosPending ? (
+                <p className="text-sm text-fg-subtle">Faltan subir las fotos: las enviamos solas cuando vuelvas a tener señal y abras la app.</p>
+              ) : outcome.photosSkipped > 0 ? (
+                <p className="text-sm text-warning">No pudimos subir {outcome.photosSkipped === 1 ? "una de las fotos" : `${outcome.photosSkipped} de las fotos`}.</p>
+              ) : (
+                outcome.photosUploaded > 0 && <p className="text-sm text-fg-subtle">Las fotos aparecen en unos segundos, cuando terminan de procesarse.</p>
+              )}
               {!loggedIn && <p className="mt-2 text-sm text-fg-subtle">Lo guardamos en este dispositivo, en <a className="underline" href="/mis-reportes">Mis casos</a>. Iniciá sesión si querés recibir avisos por correo.</p>}
               <div className="mt-6 grid gap-2">
-                <a className="btn-primary" href={created.report.path}>Ver mi reporte</a>
+                <a className="btn-primary" href={outcome.report.path}>Ver mi reporte</a>
                 <a className="btn-ghost" target="_blank" rel="noopener"
-                  href={`https://wa.me/?text=${encodeURIComponent(`Reporté "${created.report.title}" en Reporte Ciudadano. Sumate confirmándolo: ${location.origin}${created.report.path}`)}`}>
+                  href={`https://wa.me/?text=${encodeURIComponent(`Reporté "${outcome.report.title}" en Reporte Ciudadano. Sumate confirmándolo: ${location.origin}${outcome.report.path}`)}`}>
                   Compartir por WhatsApp
                 </a>
                 <a className="btn-ghost" href="/reportar">Hacer otro reporte</a>
@@ -422,20 +439,16 @@ function ConfirmExisting({ id, path }: { id: string; path: string }) {
   );
 }
 
-declare global {
-  interface Window { turnstile?: any }
-}
-
-function Turnstile({ siteKey, onToken }: { siteKey: string; onToken: (t: string) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
+function useOnline() {
+  const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
-    const render = () => window.turnstile?.render(ref.current, { sitekey: siteKey, callback: onToken, language: "es", appearance: "interaction-only", theme: resolvedTheme() });
-    if (window.turnstile) return void render();
-    const s = document.createElement("script");
-    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    s.async = true;
-    s.onload = render;
-    document.head.append(s);
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
   }, []);
-  return <div ref={ref} />;
+  return online;
 }

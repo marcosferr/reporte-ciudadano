@@ -43,6 +43,18 @@ export async function reservePhotos(reportId: string, count: number, kind: Photo
   return rows;
 }
 
+/**
+ * Reservas de `keys` que todavía no recibieron su archivo, para volver a firmar sus subidas cuando el permiso
+ * venció: pedir reservas nuevas no sirve, porque las viejas siguen ocupando el cupo del reporte.
+ */
+export async function pendingPhotos(reportId: string, keys: string[], kind: Photo["kind"] = "report") {
+  if (!keys.length) return [];
+  return sql()<Pick<Photo, "id" | "s3_key_original">[]>`
+    SELECT id, s3_key_original FROM report_photos
+    WHERE report_id = ${reportId} AND kind = ${kind} AND status = 'processing' AND s3_key_original IN ${sql()(keys)}
+    ORDER BY id`;
+}
+
 export async function getPhotoByKey(key: string): Promise<Photo | undefined> {
   const [row] = await sql()<Photo[]>`SELECT * FROM report_photos WHERE s3_key_original = ${key}`;
   return row;

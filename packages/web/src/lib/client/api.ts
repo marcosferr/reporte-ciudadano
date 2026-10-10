@@ -1,5 +1,3 @@
-import { saveMyReport } from "./my-reports";
-
 export interface NewReport {
   category: string;
   title: string;
@@ -8,13 +6,6 @@ export interface NewReport {
   lng: number;
   address?: string;
   extra: Record<string, string>;
-  turnstile?: string;
-}
-
-export interface Created {
-  report: { id: string; code: string; path: string; title: string };
-  anonToken?: string;
-  photosUploaded: number;
 }
 
 export class ApiError extends Error {
@@ -37,34 +28,33 @@ export async function api<T>(url: string, init?: RequestInit & { json?: unknown 
   return data as T;
 }
 
-type Upload = { url: string; fields: Record<string, string> };
+export type Upload = { url: string; fields: Record<string, string> };
+
+/** Una foto que no se va a poder subir aunque se reintente. */
+export class PhotoRejected extends Error {}
+
+/** Sube una foto a S3 con el POST prefirmado que devolvió la API. */
+export async function uploadPhoto(u: Upload, photo: Blob) {
+  // Un Blob guardado en IndexedDB que el navegador ya no puede leer (pasa en Safari) no se arregla reintentando.
+  await photo.slice(0, 1).arrayBuffer().catch(() => {
+    throw new PhotoRejected("No se pudo leer una foto");
+  });
+  const form = new FormData();
+  for (const [k, v] of Object.entries(u.fields)) form.append(k, v);
+  form.append("file", photo, "foto.jpg");
+  const res = await fetch(u.url, { method: "POST", body: form });
+  // S3 responde 4xx cuando la foto no cumple la política (tamaño, tipo) o el permiso no sirve.
+  if (res.status >= 400 && res.status < 500) throw new PhotoRejected("No se pudo subir una foto");
+  if (!res.ok) throw new Error("No se pudo subir una foto");
+}
 
 export async function uploadPhotos(uploads: Upload[], photos: Blob[], onProgress?: (done: number) => void) {
   let done = 0;
   await Promise.all(
     uploads.map(async (u, i) => {
-      const form = new FormData();
-      for (const [k, v] of Object.entries(u.fields)) form.append(k, v);
-      form.append("file", photos[i], "foto.jpg");
-      const res = await fetch(u.url, { method: "POST", body: form });
-      if (!res.ok) throw new Error("No se pudo subir una foto");
+      await uploadPhoto(u, photos[i]);
       onProgress?.(++done);
     }),
   );
   return done;
-}
-
-export async function submitReport(data: NewReport, photos: Blob[], onProgress?: (msg: string) => void): Promise<Created> {
-  onProgress?.("Enviando reporte…");
-  const res = await api<{ report: Created["report"]; anonToken?: string; uploads: Upload[] }>("/api/reports", {
-    method: "POST",
-    json: { ...data, photos: photos.length },
-  });
-  saveMyReport({ ...res.report, token: res.anonToken, created_at: new Date().toISOString() });
-  let photosUploaded = 0;
-  if (res.uploads.length) {
-    onProgress?.(`Subiendo fotos (0/${res.uploads.length})…`);
-    photosUploaded = await uploadPhotos(res.uploads, photos, (n) => onProgress?.(`Subiendo fotos (${n}/${res.uploads.length})…`));
-  }
-  return { report: res.report, anonToken: res.anonToken, photosUploaded };
 }

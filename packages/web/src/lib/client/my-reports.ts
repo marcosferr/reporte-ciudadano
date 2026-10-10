@@ -6,6 +6,8 @@ export interface MyReport {
   title: string;
   token?: string;
   created_at: string;
+  /** Fotos que no se pudieron subir (sin lugar en el reporte); se pueden agregar desde la página del reporte. */
+  photos_missing?: number;
 }
 
 const KEY = "rc:my-reports";
@@ -25,4 +27,9 @@ export function saveMyReport(r: MyReport) {
   } catch {
     /* almacenamiento no disponible */
   }
+}
+
+export function setMissingPhotos(id: string, count: number) {
+  const r = getMyReports().find((x) => x.id === id);
+  if (r) saveMyReport({ ...r, photos_missing: count || undefined });
 }
