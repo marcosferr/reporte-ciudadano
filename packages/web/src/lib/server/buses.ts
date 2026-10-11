@@ -6,7 +6,8 @@
 const VMT_API = "https://sistemas.mopc.gov.py/prototipo_vmt/api";
 const TIMEOUT_MS = 5000;
 // Los recorridos de una empresa grande pesan cientos de KB y el prototipo tarda varios segundos en armarlos.
-const ITINERARIES_TIMEOUT_MS = 20_000;
+// Por debajo de los 20 s de la Lambda (infra/web.ts): si no, la corta antes y no llega el 502.
+const ITINERARIES_TIMEOUT_MS = 15_000;
 // Un bus que no reportó en este tiempo está apagado o fuera de servicio.
 const STALE_MS = 2 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
