@@ -24,6 +24,11 @@ export async function presignUpload(key: string) {
   });
 }
 
+/** Hay captcha configurado (en local no). */
+export function captchaEnabled(): boolean {
+  return !!config.turnstileSecret;
+}
+
 export async function verifyTurnstile(token: string | undefined, ip: string): Promise<boolean> {
   const secret = config.turnstileSecret;
   if (!secret) return true; // captcha desactivado

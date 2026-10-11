@@ -4,6 +4,7 @@ import HomePicker from "../components/islands/HomePicker";
 import MyReports from "../components/islands/MyReports";
 import ReportList from "../components/ReportList.astro";
 import Base from "../layouts/Base.astro";
+import { config } from "../lib/server/config";
 import { homeFor } from "../lib/server/home";
 
 const user = Astro.locals.user;
@@ -32,7 +33,7 @@ const mine = user ? await listReports({ userId: user.id, visibility: "any", limi
     )}
     <section>
       <h2 class="mb-2 text-lg font-bold">Hechos desde este dispositivo</h2>
-      <MyReports client:only="react" />
+      <MyReports client:only="react" turnstileSiteKey={config.turnstileSiteKey} loggedIn={!!user} />
     </section>
   </div>
 </Base>

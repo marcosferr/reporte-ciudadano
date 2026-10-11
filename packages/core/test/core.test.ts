@@ -12,7 +12,7 @@ const reports = await import("../src/reports");
 const { reportTile } = await import("../src/tiles");
 const stats = await import("../src/stats");
 const { locate } = await import("../src/areas");
-const { reservePhotos } = await import("../src/photos");
+const { pendingPhotos, reservePhotos } = await import("../src/photos");
 const { hit } = await import("../src/ratelimit");
 
 const admin = { id: "admin-1", role: "admin" as const };
@@ -222,6 +222,18 @@ describe("infra", () => {
     const more = await reservePhotos(report.id, 3);
     expect(more).toHaveLength(1);
     expect(more[0].s3_key_original).toMatch(new RegExp(`^uploads/${report.id}/`));
+  });
+
+  it("devuelve solo las reservas del reporte que siguen esperando su archivo", async () => {
+    const { report } = await reports.createReport({ category: "bache", title: "Reintento tardío", description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
+    const { report: other } = await reports.createReport({ category: "bache", title: "Otro reporte", description: "", lat: -25.3, lng: -57.6, extra: {} }, {});
+    const [uploaded, pending] = await reservePhotos(report.id, 2);
+    const [foreign] = await reservePhotos(other.id, 1);
+    await sql()`UPDATE report_photos SET status = 'approved' WHERE id = ${uploaded.id}`;
+    const keys = [uploaded, pending, foreign].map((p) => p.s3_key_original);
+    expect(await pendingPhotos(report.id, keys)).toEqual([{ id: pending.id, s3_key_original: pending.s3_key_original }]);
+    expect(await pendingPhotos(report.id, keys, "resolution")).toEqual([]);
+    expect(await pendingPhotos(report.id, [])).toEqual([]);
   });
 
   it("limita la tasa de acciones por clave", async () => {
