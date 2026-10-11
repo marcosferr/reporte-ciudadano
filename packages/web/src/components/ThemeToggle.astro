@@ -39,6 +39,7 @@ const options = [
   import { applyTheme, readTheme, syncThemeColor, THEME_KEY, type ThemeChoice } from "../lib/client/theme";
 
   const toggle = document.querySelector<HTMLDetailsElement>(".theme-toggle");
+  const summary = toggle?.querySelector<HTMLElement>("summary") ?? null;
   const buttons = [...document.querySelectorAll<HTMLButtonElement>("[data-theme-choice]")];
 
   function render(choice: ThemeChoice) {
@@ -53,7 +54,10 @@ const options = [
       const choice = b.dataset.themeChoice as ThemeChoice;
       applyTheme(choice, { save: true });
       render(choice);
+      // Al cerrar el menú el foco se va al <body>, y quien navega con el teclado pierde el sitio.
+      // Devolverlo al summary deja el botón listo para la siguiente tecla.
       if (toggle) toggle.open = false;
+      summary?.focus();
     });
   }
   // Otra pestaña cambió el tema.
