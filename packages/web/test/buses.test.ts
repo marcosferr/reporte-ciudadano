@@ -42,6 +42,18 @@ describe("colectivos en vivo", () => {
     expect(out[0]).toMatchObject({ geometry: { coordinates: [-57.6, -25.3] }, properties: { line: "41 - 1", speed: 20, companyCode: 22, route: "00d2", ramp: true } });
   });
 
+  it("manda el rumbo calculado por el VMT solo si el bus se movió desde su reporte anterior", async () => {
+    const { toFeature } = await load();
+    const prev = { latitude: -25.3, longitude: -57.601, fecha_hora: new Date(NOW - 40_000).toISOString() };
+    const feature = (extra: object) => toFeature(bus(1, 30, extra) as never).properties;
+    expect(feature({ punto_anterior: prev, rumbo_calculado: 95, distancia_entre_puntos_m: 100 }).heading).toBe(95);
+    // Detenido: el VMT manda 0 o ruido del GPS.
+    expect(feature({ punto_anterior: prev, rumbo_calculado: 0, distancia_entre_puntos_m: 3 })).not.toHaveProperty("heading");
+    // Sin punto anterior, rumbo_calculado viene en 0 o viejo.
+    expect(feature({ punto_anterior: null, rumbo_calculado: 108 })).not.toHaveProperty("heading");
+    expect(feature({})).not.toHaveProperty("heading");
+  });
+
   it("junta los buses de todas las empresas aunque una no responda", async () => {
     routes["/empresas"] = () => ok([{ cod_catalogo: 22 }, { cod_catalogo: 44 }, { cod_catalogo: 8 }]);
     routes["/buses?cod_catalogo=22"] = () => ok([bus(1, 5)]);

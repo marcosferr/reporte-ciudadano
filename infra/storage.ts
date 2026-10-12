@@ -4,6 +4,8 @@
  *   review/    versiones difuminadas que esperan a un moderador (privadas: el staff las ve con URL firmada)
  *   public/    versiones difuminadas aprobadas y miniaturas, servidas por CloudFront en /media/*
  *   withheld/  fotos de reportes ocultados por un moderador (privadas; vuelven a public/ si se republica)
+ *   vmt/       histórico de los colectivos del VMT (privado; ver infra/buses.ts). Lo crudo por minuto se borra a
+ *              los 60 días, cuando ya está compactado en vmt/positions/.
  */
 export function createStorage() {
   const account = aws.getCallerIdentityOutput({}).accountId;
@@ -15,7 +17,10 @@ export function createStorage() {
       allowHeaders: ["*"],
       maxAge: "1 day",
     },
-    lifecycle: [{ id: "expire-originals", prefix: "uploads/", expiresIn: "90 days" }],
+    lifecycle: [
+      { id: "expire-originals", prefix: "uploads/", expiresIn: "90 days" },
+      { id: "expire-vmt-raw-buses", prefix: "vmt/raw/buses/", expiresIn: "60 days" },
+    ],
     transform: {
       // SST da a CloudFront lectura de todo el bucket y sin condición de origen: cualquier distribución,
       // incluso de otra cuenta, podría leer los originales sin difuminar. Se limita a public/ y a esta cuenta.

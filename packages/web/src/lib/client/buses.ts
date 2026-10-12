@@ -5,10 +5,10 @@ import { trackHeadings, type Track } from "./bus-heading";
 /** Un colectivo como lo devuelve /api/buses (ver lib/server/buses.ts). */
 interface BusProps {
   id: number; line: string | null; company: string; companyCode: number; route: string | null;
-  ramp: boolean; speed: number; at: string;
+  ramp: boolean; speed: number; at: string; heading?: number;
 }
-// `heading`: rumbo calculado (bus-heading.ts); sin él, el bus no lleva flecha.
-interface Bus { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: BusProps & { color: string; heading?: number } }
+// `heading`: rumbo del bus (bus-heading.ts); sin él, el bus no lleva flecha.
+interface Bus { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: BusProps & { color: string } }
 interface Route { type: "Feature"; geometry: GeoJSON.Geometry; properties: { line: string | null; direction: string | null; from: string | null; to: string | null } }
 
 const REFRESH_MS = 10_000;
@@ -215,7 +215,7 @@ export function busLayer(map: MLMap) {
       const res = await fetch("/api/buses", { signal: ctrl.signal });
       if (!res.ok) return;
       const data = (await res.json()) as { features: { type: "Feature"; geometry: Bus["geometry"]; properties: BusProps }[] };
-      tracks = trackHeadings(tracks, data.features.map((f) => ({ id: f.properties.id, at: f.geometry.coordinates })));
+      tracks = trackHeadings(tracks, data.features.map((f) => ({ id: f.properties.id, at: f.geometry.coordinates, heading: f.properties.heading })));
       glide(data.features.map((f) => {
         const heading = tracks.get(f.properties.id)?.heading;
         return { ...f, properties: { ...f.properties, color: lineColor(f.properties.line), ...(heading === undefined ? {} : { heading }) } };

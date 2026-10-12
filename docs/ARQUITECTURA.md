@@ -69,6 +69,9 @@ Los errores de negocio se lanzan como `DomainError(code, message, status)`; la w
 | `migrator.ts` | Cada deploy (`aws.lambda.Invocation`) | Aplica migraciones y, si la tabla está vacía, carga departamentos y distritos |
 | `moderation.ts` | `s3:ObjectCreated` en `uploads/` | Normaliza la imagen, consulta Rekognition, difumina caras, genera miniatura, publica en `public/` |
 | `auth-messages.ts` | Trigger `CustomMessage` de Cognito | Reemplaza los correos genéricos por HTML con la marca (`auth-email.ts`) |
+| `bus-routes.ts` | Cron diario | Trae del VMT los recorridos de los colectivos a `bus_routes` y guarda la respuesta cruda en `vmt/raw/itineraries/` |
+| `vmt-collector.ts` | Cron cada minuto | Guarda la posición de todos los colectivos en `vmt/raw/buses/` y cómo respondió el VMT en `vmt_polls` |
+| `vmt-compactor.ts` | Cron diario, 04:00 | Junta las consultas del día anterior en `vmt/positions/` (Parquet) y calcula `bus_route_activity` |
 
 `image.ts` contiene la lógica pura (decisión de moderación, difuminado, miniatura) para poder testearla sin AWS.
 
@@ -220,7 +223,7 @@ erDiagram
     }
 ```
 
-Otras tablas: `rate_limits` (contadores por ventana), `schema_migrations`.
+Otras tablas: `rate_limits` (contadores por ventana), `schema_migrations`, `bus_routes` (recorridos actuales de los colectivos), `vmt_polls` y `bus_route_activity` (histórico del VMT, ver [HISTORICO_VMT.md](HISTORICO_VMT.md)).
 
 Convenciones:
 
@@ -236,7 +239,8 @@ Definida en `sst.config.ts` + `infra/`. Cada archivo de `infra/` exporta una fun
 |---|---|
 | `vpc.ts` | VPC 10.20.0.0/16, 1 subred pública, 2 privadas (RDS exige 2 AZ), instancia fck-nat t4g.nano (también bastión SSM), endpoint de S3 |
 | `database.ts` | RDS Postgres 17 t4g.micro 20 GB, backups 7 días, protección contra borrado en producción; Lambda migradora |
-| `storage.ts` | Bucket `Media` con `uploads/` (originales, expiran a 90 días), `review/`, `withheld/` (privados) y `public/` (servido) |
+| `storage.ts` | Bucket `Media` con `uploads/` (originales, expiran a 90 días), `review/`, `withheld/`, `vmt/` (privados) y `public/` (servido) |
+| `buses.ts` | Crons de colectivos: recorridos (diario), recolector del VMT (cada minuto) y compactador (diario), con permisos por prefijo de `vmt/` |
 | `moderation.ts` | Notificación S3 → Lambda de moderación con permisos de Rekognition |
 | `auth.ts` | User pool, cliente, grupos, Google opcional, marca del Hosted UI, trigger de correos |
 | `web.ts` | Router de CloudFront, app Astro, SES opcional |

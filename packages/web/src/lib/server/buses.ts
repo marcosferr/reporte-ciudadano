@@ -7,6 +7,8 @@ const HOUR_MS = 60 * 60 * 1000;
 const BUSES_TTL_MS = 10 * 1000;
 // Recorrido de un bus que todavía no tiene uno asignado.
 const NO_ROUTE = "0000";
+// Igual que en el cliente (lib/client/bus-heading.ts): por debajo de esto el bus está detenido y el rumbo calculado es ruido.
+const MIN_MOVE_M = 15;
 
 /** Un bus y la empresa por la que se lo pidió (el prototipo identifica los recorridos por empresa). */
 export type CompanyBus = VmtBus & { company_code: number };
@@ -17,6 +19,8 @@ export interface BusFeature {
   properties: {
     id: number; line: string | null; company: string; companyCode: number; route: string | null;
     ramp: boolean; speed: number; at: string;
+    /** Rumbo en grados desde el norte, solo si el bus se movió desde su reporte anterior. */
+    heading?: number;
   };
 }
 
@@ -40,14 +44,25 @@ function cached<K, T>(ttl: number, load: (key: K) => Promise<T>): (key: K) => Pr
 // La lista de empresas casi no cambia. El prototipo solo devuelve buses de a una empresa por pedido.
 const companyCodes = cached(HOUR_MS, async () => (await vmt<VmtCompany>("/empresas")).map((r) => r.cod_catalogo));
 
+/**
+ * El `rumbo` del VMT no sirve (en una muestra de 139 buses en marcha, 52 desviados más de 45°), pero su
+ * `rumbo_calculado`, la dirección entre el reporte anterior y el actual, coincidió en todos. Con el bus detenido
+ * viene en 0 o es ruido del GPS.
+ */
+function heading(b: CompanyBus): number | undefined {
+  const moved = b.punto_anterior != null && (b.distancia_entre_puntos_m ?? 0) >= MIN_MOVE_M;
+  return moved && typeof b.rumbo_calculado === "number" && Number.isFinite(b.rumbo_calculado) ? b.rumbo_calculado : undefined;
+}
+
 export function toFeature(b: CompanyBus): BusFeature {
+  const h = heading(b);
   return {
     type: "Feature",
     geometry: { type: "Point", coordinates: [b.longitude, b.latitude] },
     properties: {
       id: b.id_bus, line: b.linea_label, company: b.eot_nombre, companyCode: b.company_code,
       route: b.route_id && b.route_id !== NO_ROUTE ? b.route_id : null, ramp: b.tiene_rampa === true,
-      speed: b.velocidad, at: b.fecha_hora,
+      speed: b.velocidad, at: b.fecha_hora, ...(h === undefined ? {} : { heading: h }),
     },
   };
 }

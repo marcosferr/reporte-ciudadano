@@ -54,7 +54,7 @@ pnpm db:bus-routes
 
 - `db:migrate` aplica en orden los `.sql` de `packages/core/migrations/` que aún no corrieron (se registran en `schema_migrations`).
 - `db:seed` descarga de geoBoundaries los 17 departamentos + Asunción y sus distritos (necesita internet). Con `--demo` agrega reportes de ejemplo en Asunción, San Lorenzo, Encarnación y Ciudad del Este.
-- `db:bus-routes` trae del prototipo del VMT los recorridos de los colectivos (tarda un par de minutos). En AWS los actualiza una vez por día la Lambda `BusRoutesSync`.
+- `db:bus-routes` trae del prototipo del VMT los recorridos de los colectivos (tarda unos segundos). En AWS los actualiza una vez por día la Lambda `BusRoutesSync`, y `VmtCollector` guarda además el histórico de posiciones ([HISTORICO_VMT.md](HISTORICO_VMT.md)); en local no corre.
 
 ### 4. Correr la web
 

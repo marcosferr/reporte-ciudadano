@@ -13,6 +13,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "hyparquet-writer": "0.16.10",
     "postgres": "^3.4.9",
     "sst": "4.17.1",
     "ulid": "^3.0.2",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^24.0.0",
+    "hyparquet": "1.31.1",
     "tsx": "^4.20.0",
     "vitest": "^5.0.2"
   }

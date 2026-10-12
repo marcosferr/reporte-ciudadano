@@ -134,6 +134,8 @@ aws rds create-db-snapshot --db-instance-identifier <id> --db-snapshot-identifie
 
 **Rollback**: volvé `main` al commit anterior y redesplegá. Las migraciones no tienen "down": si una migración rompió algo, corregila con una migración nueva o restaurá el snapshot.
 
+**Histórico de colectivos**: `VmtCollector` corre cada minuto y `VmtCompactor` a las 04:00. Para volver a compactar un día, invocá `VmtCompactor` con `{"date": "AAAA-MM-DD"}`. Detalle y consultas en [HISTORICO_VMT.md](HISTORICO_VMT.md).
+
 **El NAT se cayó**: la web sigue sirviendo (CloudFront → Lambda → RDS no pasa por el NAT) pero fallan las llamadas salientes (Cognito, Rekognition, SES, Turnstile). Reiniciá la instancia desde EC2.
 
 ## Borrar un stage

@@ -7,16 +7,16 @@ const M_PER_DEG = 111_320;
 export interface Track { at: [number, number]; heading?: number }
 
 /**
- * Rumbo de cada bus en grados desde el norte: la dirección en que se movió desde el pedido anterior y, si no se
- * movió, el último conocido. Hasta que se mueve por primera vez queda sin rumbo (y sin flecha). El `rumbo` del VMT
- * no sirve: en una muestra de 237 buses en marcha, 27 lo mandaban en 0 y 85 desviado más de 45° (casi siempre al revés).
+ * Rumbo de cada bus en grados desde el norte. Primero el que manda /api/buses (el `rumbo_calculado` del VMT, si el
+ * bus se movió desde su reporte anterior); si no, la dirección en que se movió desde el pedido anterior; si tampoco,
+ * el último conocido. Un bus detenido desde que se prendió la capa queda sin rumbo (y sin flecha).
  */
-export function trackHeadings(prev: ReadonlyMap<number, Track>, buses: { id: number; at: [number, number] }[]): Map<number, Track> {
+export function trackHeadings(prev: ReadonlyMap<number, Track>, buses: { id: number; at: [number, number]; heading?: number }[]): Map<number, Track> {
   const next = new Map<number, Track>();
   for (const b of buses) {
     const p = prev.get(b.id);
     const moved = p && distanceM(p.at, b.at) >= MIN_MOVE_M ? bearing(p.at, b.at) : undefined;
-    next.set(b.id, { at: b.at, heading: moved ?? p?.heading });
+    next.set(b.id, { at: b.at, heading: b.heading ?? moved ?? p?.heading });
   }
   return next;
 }
