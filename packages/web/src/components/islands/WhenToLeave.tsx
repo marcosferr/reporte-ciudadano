@@ -192,6 +192,9 @@ function TripView({ trip: saved, onChange, onSync, onDelete }: { trip: Trip; onC
         <h1 id="titular" className="font-display text-4xl font-extrabold" role="status" aria-live="polite">{h.title}</h1>
         {h.sub && <p className="text-fg-muted">{h.sub}</p>}
         {snap.advice.stale && snap.updatedAt && <p className="text-xs text-warning">Sin actualizar hace {Math.round((Date.now() - snap.updatedAt) / 1000)} s</p>}
+        {snap.delayedMin !== null && snap.advice.state !== "none" && (
+          <p className="text-xs text-warning">El VMT está mandando atrasadas algunas líneas de esta parada (hace {snap.delayedMin} min): puede venir otro colectivo antes.</p>
+        )}
         <p className="pt-2 text-sm text-fg-muted">{walkText(snap)}</p>
       </section>
 
@@ -251,6 +254,13 @@ function headline(s: DepartureSnapshot): { title: string; sub?: string } {
     case "no-data":
       return { title: "Sin datos de los colectivos", sub: "El VMT no está respondiendo. Probá en un rato." };
     default:
+      // Los colectivos de tu línea están en la calle, pero el VMT manda sus ubicaciones atrasadas: no es que no haya.
+      if (s.delayedMin !== null) {
+        return {
+          title: "El VMT está atrasado con tu línea",
+          sub: `La última ubicación de sus colectivos es de hace ${s.delayedMin} min, así que no podemos calcular cuándo llegan. Probá en un rato.`,
+        };
+      }
       return {
         title: "No hay colectivos de tu línea en camino",
         sub: [a.lastPassedAgoMin !== undefined ? `El último pasó hace ${a.lastPassedAgoMin} min.` : null, "Puede que el próximo todavía no haya salido de la terminal o no esté mandando su ubicación."].filter(Boolean).join(" "),

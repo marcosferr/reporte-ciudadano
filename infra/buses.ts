@@ -12,7 +12,9 @@ export function createBuses(media: ReturnType<typeof createStorage>["media"], db
   const common = { link: [db], vpc, architecture: "arm64" as const, environment: { MEDIA_BUCKET: media.name } };
 
   new sst.aws.Cron("BusRoutesSync", {
-    schedule: "rate(1 day)",
+    // 03:00 de Paraguay (UTC-3), con pocos buses en la calle: pedir los recorridos de todas las empresas es pesado
+    // para el prototipo del VMT. Con `rate(1 day)` corría a la hora del último deploy.
+    schedule: "cron(0 6 * * ? *)",
     function: {
       ...common,
       handler: "packages/functions/src/bus-routes.handler",

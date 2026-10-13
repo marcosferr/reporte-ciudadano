@@ -83,6 +83,29 @@ describe("colectivos en vivo", () => {
     expect(out.map((f) => [f.properties.id, f.properties.at])).toEqual([[2, "2026-10-11T14:59:50.000Z"]]);
   });
 
+  it("avisa qué empresas en servicio tiene atrasadas el VMT, en vez de dejarlas afuera sin decir nada", async () => {
+    const { delayedCompanies } = await load();
+    const rows = [
+      // Empresa 22: todos sus buses con 15 min de atraso (el VMT está atrasado con ella).
+      bus(1, 15 * 60), bus(2, 16 * 60),
+      // Empresa 44: uno al día y otro apagado hace rato (normal).
+      bus(3, 5, { company_code: 44 }), bus(4, 20 * 60, { company_code: 44 }),
+      // Empresa 8: su último reporte es de hace dos horas (fuera de servicio, no atrasada).
+      bus(5, 2 * 3600, { company_code: 8 }),
+    ];
+    expect(delayedCompanies(rows, NOW)).toEqual([
+      { companyCode: 22, company: "1° DE DICIEMBRE SRL", buses: 2, lastAt: new Date(NOW - 15 * 60_000).toISOString() },
+    ]);
+    routes["/empresas"] = () => ok([{ cod_catalogo: 22 }, { cod_catalogo: 44 }]);
+    routes["/buses?cod_catalogo=22"] = () => ok([bus(1, 15 * 60)]);
+    routes["/buses?cod_catalogo=44"] = () => ok([bus(3, 5)]);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { GET } = await load();
+    const body = (await (await GET(ctx)).json()) as { features: BusFeature[]; delayed: { companyCode: number }[] };
+    expect(body.features.map((f) => f.properties.id)).toEqual([3]);
+    expect(body.delayed.map((d) => d.companyCode)).toEqual([22]);
+  });
+
   it("un bus sin recorrido asignado no tiene route", async () => {
     const { liveBuses } = await load();
     expect(liveBuses([bus(1, 5, { route_id: "0000", linea_label: null })], NOW)[0].properties).toMatchObject({ route: null, line: null });

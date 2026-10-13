@@ -16,6 +16,7 @@ const catalog = buildCatalog(catalogFile());
 const trip = newTrip({ name: "Al trabajo", stop, options: stopOptions(catalog, stop).filter((o) => o.line === "41"), radiusM: STOP_CFG.STOP_RADIUS_M, walk: { mode: "manual", minutes: 5, paceKmh: 4.5, samples: [] }, marginMin: 2 }, catalog, T0);
 
 let feed: () => BusFeature[];
+let delayed: () => { companyCode: number; company: string; buses: number; lastAt: string }[];
 const calls: { url: string; init: RequestInit | undefined }[] = [];
 const doc = Object.assign(new EventTarget(), { visibilityState: "visible" as DocumentVisibilityState });
 
@@ -39,11 +40,12 @@ beforeEach(() => {
   doc.visibilityState = "visible";
   calls.length = 0;
   feed = () => [];
+  delayed = () => [];
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
     const headers = { Date: new Date().toUTCString() };
     if (url === "/api/buses/routes") return new Response(JSON.stringify(catalogFile()), { headers });
-    if (url === "/api/buses") return new Response(JSON.stringify({ type: "FeatureCollection", features: feed() }), { headers });
+    if (url === "/api/buses") return new Response(JSON.stringify({ type: "FeatureCollection", features: feed(), delayed: delayed() }), { headers });
     throw new Error(`fetch inesperado: ${url}`);
   });
 });
@@ -152,6 +154,19 @@ describe("¿Cuándo salgo? en el navegador", () => {
     await settle();
     expect(d.saveTrip).toHaveBeenCalledWith(expect.objectContaining({ id: trip.id, catalogVersion: "v1" }));
     expect(ctrl.getSnapshot().tripStatus).toBe("same");
+    ctrl.stop();
+  });
+
+  it("si el VMT está atrasado con la empresa de la línea, lo dice en vez de 'no hay colectivos'", async () => {
+    delayed = () => [{ companyCode: 22, company: "LINCE SRL", buses: 3, lastAt: new Date(Date.now() - 15 * 60_000).toISOString() }];
+    const ctrl = createDepartureController(trip, deps());
+    await ctrl.start();
+    await settle();
+    expect(ctrl.getSnapshot()).toMatchObject({ delayedMin: 15, advice: { state: "none" } });
+    // Otra empresa atrasada no es asunto de este viaje.
+    delayed = () => [{ companyCode: 44, company: "VANGUARDIA SACI", buses: 3, lastAt: new Date(Date.now() - 15 * 60_000).toISOString() }];
+    await advance(10_000);
+    expect(ctrl.getSnapshot().delayedMin).toBeNull();
     ctrl.stop();
   });
 

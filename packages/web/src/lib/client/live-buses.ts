@@ -3,13 +3,15 @@
  * cookies ni Referer: el servidor no puede distinguir quién pregunta ni desde qué página.
  */
 import type { LiveBus } from "@rc/core/departure";
-import type { BusFeature } from "../server/buses";
+import type { BusFeature, DelayedCompany } from "../server/buses";
 
 export const REFRESH_MS = 10_000;
 export const PRIVATE_FETCH = { credentials: "omit", referrerPolicy: "no-referrer" } as const satisfies RequestInit;
 
 export interface LiveFeed {
   features: BusFeature[];
+  /** Empresas en servicio cuyos datos el VMT manda atrasados: sus buses no están en `features`. */
+  delayed: DelayedCompany[];
   /** Cuándo llegó la respuesta, con el reloj del teléfono. */
   receivedAt: number;
   /** Cuánto adelanta el reloj del teléfono respecto del servidor (ms), si se pudo medir. */
@@ -21,9 +23,9 @@ export async function fetchLiveBuses(signal?: AbortSignal, f: typeof fetch = fet
   const res = await f("/api/buses", { ...PRIVATE_FETCH, signal });
   if (!res.ok) return null;
   const receivedAt = Date.now();
-  const data = (await res.json()) as { features: BusFeature[] };
+  const data = (await res.json()) as { features: BusFeature[]; delayed?: DelayedCompany[] };
   const clockOffsetMs = clockOffsetFrom(res.headers, receivedAt);
-  return { features: data.features, receivedAt, ...(clockOffsetMs === undefined ? {} : { clockOffsetMs }) };
+  return { features: data.features, delayed: data.delayed ?? [], receivedAt, ...(clockOffsetMs === undefined ? {} : { clockOffsetMs }) };
 }
 
 /**

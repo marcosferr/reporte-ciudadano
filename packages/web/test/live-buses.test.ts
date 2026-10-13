@@ -11,6 +11,8 @@ describe("colectivos en vivo en el navegador", () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ features: [] }), { headers: { Date: new Date().toUTCString() } }));
     const feed = await fetchLiveBuses(undefined, f as unknown as typeof fetch);
     expect(feed?.features).toEqual([]);
+    // Sin el campo (respuesta de una versión anterior), ninguna empresa atrasada.
+    expect(feed?.delayed).toEqual([]);
     expect(f).toHaveBeenCalledWith("/api/buses", { credentials: "omit", referrerPolicy: "no-referrer", signal: undefined });
     const down = vi.fn(async () => new Response("", { status: 502 }));
     expect(await fetchLiveBuses(undefined, down as unknown as typeof fetch)).toBeNull();

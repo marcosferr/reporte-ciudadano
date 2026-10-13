@@ -5,6 +5,9 @@ import { createHash } from "node:crypto";
 
 // Un bus que no reportó en este tiempo está apagado o fuera de servicio.
 const STALE_MS = 2 * 60 * 1000;
+// Una empresa con buses que reportaron en este tiempo, pero ninguno en los últimos 2 minutos, está en servicio y el
+// VMT está atrasado con sus datos (le pasa a veces a un grupo de empresas: todas quedan minutos atrás a la vez).
+const DELAYED_MS = 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const BUSES_TTL_MS = 10 * 1000;
 // Recorrido de un bus que todavía no tiene uno asignado.
@@ -82,7 +85,34 @@ export function liveBuses(rows: CompanyBus[], now = Date.now()): BusFeature[] {
   return [...latest.values()].map(toFeature);
 }
 
-async function fetchBuses(): Promise<BusFeature[]> {
+/** Una empresa en servicio cuyos datos el VMT está mandando atrasados: sus buses no aparecen en `features`. */
+export interface DelayedCompany { companyCode: number; company: string; buses: number; lastAt: string }
+
+/**
+ * Empresas cuyos buses reportaron en la última hora pero ninguno en los últimos 2 minutos. Sin esto, ¿Cuándo salgo?
+ * diría "no hay colectivos en camino" cuando en realidad los hay y el VMT está atrasado.
+ */
+export function delayedCompanies(rows: CompanyBus[], now = Date.now()): DelayedCompany[] {
+  const byCompany = new Map<number, { company: string; buses: Set<number>; last: number }>();
+  for (const b of rows) {
+    const at = Date.parse(b.fecha_hora);
+    if (!Number.isFinite(at)) continue;
+    const c = byCompany.get(b.company_code) ?? { company: b.eot_nombre, buses: new Set<number>(), last: -Infinity };
+    c.last = Math.max(c.last, at);
+    if (now - at <= DELAYED_MS) c.buses.add(b.id_bus);
+    byCompany.set(b.company_code, c);
+  }
+  const out: DelayedCompany[] = [];
+  for (const [companyCode, c] of byCompany) {
+    if (!c.buses.size || now - c.last <= STALE_MS) continue;
+    out.push({ companyCode, company: c.company, buses: c.buses.size, lastAt: new Date(c.last).toISOString() });
+  }
+  return out.sort((a, b) => a.companyCode - b.companyCode);
+}
+
+export interface LiveBuses { features: BusFeature[]; delayed: DelayedCompany[] }
+
+async function fetchBuses(): Promise<LiveBuses> {
   const codes = await companyCodes(null);
   const results = await Promise.allSettled(
     codes.map(async (c) => (await vmt<VmtBus>(`/buses?cod_catalogo=${c}`)).map((b): CompanyBus => ({ ...b, company_code: c }))),
@@ -90,7 +120,10 @@ async function fetchBuses(): Promise<BusFeature[]> {
   const ok = results.filter((r): r is PromiseFulfilledResult<CompanyBus[]> => r.status === "fulfilled");
   // Si cae una empresa se muestran las demás; si caen todas, el prototipo no está respondiendo.
   if (!ok.length && codes.length) throw (results[0] as PromiseRejectedResult).reason;
-  return liveBuses(ok.flatMap((r) => r.value));
+  const rows = ok.flatMap((r) => r.value);
+  const delayed = delayedCompanies(rows);
+  if (delayed.length) console.warn("VMT atrasado", delayed.map((d) => `${d.companyCode}:${Math.round((Date.now() - Date.parse(d.lastAt)) / 60_000)}min`).join(" "));
+  return { features: liveBuses(rows), delayed };
 }
 
 const buses = cached(BUSES_TTL_MS, fetchBuses);

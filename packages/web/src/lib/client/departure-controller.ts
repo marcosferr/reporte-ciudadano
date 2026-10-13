@@ -44,6 +44,11 @@ export interface DepartureSnapshot {
   armed: boolean;
   /** Cuándo llegó el último dato (reloj del teléfono). */
   updatedAt: number | null;
+  /**
+   * El VMT está mandando atrasados los datos de alguna empresa de las líneas del viaje: hace cuántos minutos es su
+   * último dato. Sus buses no aparecen, así que "no hay colectivos en camino" no sería cierto.
+   */
+  delayedMin: number | null;
   /** Hora real estimada (reloj del teléfono corregido con el del servidor). */
   now: number;
 }
@@ -61,6 +66,7 @@ export function createDepartureController(initial: Trip, deps: ControllerDeps) {
   let smooth = new Map<string, BusEta>();
   let list: BusEta[] = [];
   let updatedAt: number | null = null;
+  let delayed: LiveFeed["delayed"] = [];
   const offsets: number[] = [];
   let fix: Fix | null = null;
   let armed = false, armedAt = 0;
@@ -105,6 +111,7 @@ export function createDepartureController(initial: Trip, deps: ControllerDeps) {
     const feed = await deps.fetchFeed(signal);
     if (!feed || signal.aborted) return;
     updatedAt = feed.receivedAt;
+    delayed = feed.delayed;
     if (feed.clockOffsetMs !== undefined && offsets.push(feed.clockOffsetMs) > 10) offsets.shift();
     if (catalog) {
       const now = trueNow();
@@ -141,7 +148,10 @@ export function createDepartureController(initial: Trip, deps: ControllerDeps) {
       ? advise(list, { now, walkS: walk.minutes * 60, marginS: trip.marginMin * 60, feedAgeS: updatedAt === null ? null : (deps.now() - updatedAt) / 1000, lastPassedAt: lastCrossing(tracks) })
       : advise([], { now, walkS: 0, marginS: 0, feedAgeS: null });
     maybeNotify(advice);
-    snapshot = { catalog: catalogState, trip, tripStatus, advice, buses: list, walk, armed, updatedAt, now };
+    const companies = new Set(trip.choices.map((c) => c.companyCode));
+    const late = delayed.filter((d) => companies.has(d.companyCode)).map((d) => now - Date.parse(d.lastAt));
+    const delayedMin = late.length ? Math.max(1, Math.round(Math.min(...late) / 60_000)) : null;
+    snapshot = { catalog: catalogState, trip, tripStatus, advice, buses: list, walk, armed, updatedAt, delayedMin, now };
     for (const l of listeners) l();
   }
 
