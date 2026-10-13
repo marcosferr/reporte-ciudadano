@@ -2,6 +2,7 @@
  * Recorridos de los colectivos, guardados en la base. El VMT tarda segundos en armar los de una empresa y
  * cambian muy de vez en cuando, así que se traen una vez por día (Lambda BusRoutesSync) y el mapa los lee de acá.
  */
+import type { CatalogFeature } from "./bus-catalog";
 import { sql } from "./db";
 import { vmt, vmtTry, type VmtCompany, type VmtItinerary } from "./vmt";
 
@@ -9,6 +10,8 @@ import { vmt, vmtTry, type VmtCompany, type VmtItinerary } from "./vmt";
 const ITINERARIES_TIMEOUT_MS = 60_000;
 // Empresas pedidas a la vez: rápido sin cargar al prototipo con las 34 juntas.
 const CONCURRENCY = 4;
+// Simplificación del catálogo que se baja al teléfono (~3 m): de 240 mil vértices a 44 mil, ~130 KB con gzip.
+export const CATALOG_TOLERANCE_DEG = 0.00003;
 
 export interface BusRoute {
   type: "Feature";
@@ -75,14 +78,14 @@ export async function syncBusRoutes(opts: SyncOptions = {}): Promise<{ routes: n
     for (const [code, itineraries] of fetched) {
       await tx`DELETE FROM bus_routes WHERE company_code = ${code}`;
       // Solo lo que se guarda: el VMT manda además la vigencia, observaciones, etc.
-      const rows = itineraries.map(({ ruta_hex, ruta_linea, sentido, origen, destino, geojson }) => ({ ruta_hex, ruta_linea, sentido, origen, destino, geojson }));
+      const rows = itineraries.map(({ ruta_hex, ruta_linea, sentido, origen, destino, eot_nombre, geojson }) => ({ ruta_hex, ruta_linea, sentido, origen, destino, eot_nombre: eot_nombre ?? null, geojson }));
       // Si el VMT repite un ruta_hex en la misma empresa queda el primero.
       const inserted = await tx`
-        INSERT INTO bus_routes (company_code, route_hex, line, direction, origin, destination, geom)
-        SELECT ${code}, lower(r.ruta_hex), r.ruta_linea, r.sentido, r.origen, r.destino,
+        INSERT INTO bus_routes (company_code, route_hex, line, direction, origin, destination, company_name, geom)
+        SELECT ${code}, lower(r.ruta_hex), r.ruta_linea, r.sentido, r.origen, r.destino, r.eot_nombre,
           ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(r.geojson), 4326))
         FROM jsonb_to_recordset(${tx.json(rows)})
-          AS r(ruta_hex text, ruta_linea text, sentido text, origen text, destino text, geojson text)
+          AS r(ruta_hex text, ruta_linea text, sentido text, origen text, destino text, eot_nombre text, geojson text)
         ON CONFLICT DO NOTHING`;
       routes += inserted.count;
     }
@@ -112,4 +115,26 @@ export async function getBusRoute(companyCode: number, route: string): Promise<B
     geometry: row.geometry,
     properties: { line: row.line, direction: row.direction, from: row.origin, to: row.destination },
   };
+}
+
+/**
+ * Todos los recorridos, simplificados, para el catálogo que se baja entero al teléfono (/api/buses/routes): así
+ * nunca se pide uno en particular y el servidor no sabe qué línea le interesa a nadie. Un recorrido de una sola
+ * parte va como LineString. `ST_LineMerge` no se usa: puede dar vuelta el orden de los vértices, que es el sentido
+ * de viaje.
+ */
+export async function listBusRoutes(): Promise<CatalogFeature[]> {
+  const rows = await sql()<{ company_code: number; route_hex: string; company_name: string | null; line: string | null; direction: string | null; origin: string | null; destination: string | null; geometry: CatalogFeature["geometry"] }[]>`
+    SELECT company_code, route_hex, company_name, line, direction, origin, destination,
+      ST_AsGeoJSON(CASE WHEN ST_NumGeometries(g) = 1 THEN ST_GeometryN(g, 1) ELSE g END, 5)::json AS geometry
+    FROM (SELECT *, ST_Simplify(geom, ${CATALOG_TOLERANCE_DEG}, true) AS g FROM bus_routes) r
+    ORDER BY company_code, route_hex`;
+  return rows.map((r) => ({
+    type: "Feature",
+    geometry: r.geometry,
+    properties: {
+      company: r.company_code, companyName: r.company_name, route: r.route_hex,
+      line: r.line, direction: r.direction, from: r.origin, to: r.destination,
+    },
+  }));
 }

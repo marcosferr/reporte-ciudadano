@@ -2,14 +2,15 @@ import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BusFeature } from "../src/lib/server/buses";
 
-const { getBusRoute } = vi.hoisted(() => ({ getBusRoute: vi.fn() }));
-vi.mock("@rc/core/bus-routes", () => ({ getBusRoute }));
+const { getBusRoute, listBusRoutes } = vi.hoisted(() => ({ getBusRoute: vi.fn(), listBusRoutes: vi.fn() }));
+vi.mock("@rc/core/bus-routes", () => ({ getBusRoute, listBusRoutes }));
 
 // Cada test importa el módulo de nuevo: guarda en memoria la lista de empresas y los últimos buses.
 async function load() {
   vi.resetModules();
   const route = await import("../src/pages/api/buses/route");
-  return { ...(await import("../src/lib/server/buses")), ...(await import("../src/pages/api/buses/index")), routeGet: route.GET };
+  const routes = await import("../src/pages/api/buses/routes");
+  return { ...(await import("../src/lib/server/buses")), ...(await import("../src/pages/api/buses/index")), routeGet: route.GET, routesGet: routes.GET };
 }
 
 // /api/buses no lee nada del pedido; /api/buses/route solo la URL.
@@ -76,6 +77,12 @@ describe("colectivos en vivo", () => {
     expect((await GET(ctx)).status).toBe(200);
   });
 
+  it("descarta un reporte con fecha ilegible y manda la hora en UTC", async () => {
+    const { liveBuses } = await load();
+    const out = liveBuses([bus(1, 5, { fecha_hora: "ayer" }), bus(2, 5, { fecha_hora: "2026-10-11T11:59:50-03:00" })], NOW);
+    expect(out.map((f) => [f.properties.id, f.properties.at])).toEqual([[2, "2026-10-11T14:59:50.000Z"]]);
+  });
+
   it("un bus sin recorrido asignado no tiene route", async () => {
     const { liveBuses } = await load();
     expect(liveBuses([bus(1, 5, { route_id: "0000", linea_label: null })], NOW)[0].properties).toMatchObject({ route: null, line: null });
@@ -95,5 +102,40 @@ describe("colectivos en vivo", () => {
   it.each(["company=22", "company=x&route=00d2", "company=22&route=../x"])("rechaza %s con 400", async (query) => {
     const { routeGet } = await load();
     expect((await routeGet(routeRequest(query))).status).toBe(400);
+  });
+});
+
+describe("catálogo de recorridos", () => {
+  const feature = (hex: string, x = -57.6) => ({
+    type: "Feature", geometry: { type: "LineString", coordinates: [[x, -25.3], [-57.61, -25.31]] },
+    properties: { company: 22, companyName: "LINCE SRL", route: hex, line: "41", direction: "ida", from: "LAMBARÉ", to: "ASUNCIÓN" },
+  });
+
+  it("devuelve todos los recorridos con una versión, cacheables por una hora y armados una sola vez", async () => {
+    listBusRoutes.mockReset().mockResolvedValue([feature("00d2"), feature("00d3")]);
+    const { routesGet } = await load();
+    const res = await routesGet(ctx);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600, s-maxage=3600");
+    const body = (await res.json()) as { version: string; features: unknown[] };
+    expect(body.features).toHaveLength(2);
+    expect(body.version).toMatch(/^[\w-]{12}$/);
+    expect(res.headers.get("ETag")).toBe(`"${body.version}"`);
+    await routesGet(ctx);
+    expect(listBusRoutes).toHaveBeenCalledTimes(1);
+  });
+
+  it("la versión cambia si cambia un recorrido, y un error de la base no queda guardado", async () => {
+    listBusRoutes.mockReset().mockResolvedValue([feature("00d2")]);
+    const v1 = ((await (await (await load()).routesGet(ctx)).json()) as { version: string }).version;
+    listBusRoutes.mockReset().mockResolvedValue([feature("00d2", -57.59)]);
+    const v2 = ((await (await (await load()).routesGet(ctx)).json()) as { version: string }).version;
+    expect(v2).not.toBe(v1);
+
+    listBusRoutes.mockReset().mockRejectedValueOnce(new Error("sin base")).mockResolvedValue([feature("00d2")]);
+    const { routesGet } = await load();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await routesGet(ctx)).status).toBe(500);
+    expect((await routesGet(ctx)).status).toBe(200);
   });
 });

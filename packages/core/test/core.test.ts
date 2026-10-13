@@ -309,7 +309,7 @@ describe("recorridos de colectivos", () => {
   const VMT = "https://sistemas.mopc.gov.py/prototipo_vmt/api";
   const ok = (data: unknown[]) => new Response(JSON.stringify({ success: true, data }));
   const line = { type: "LineString", coordinates: [[-57.6, -25.3], [-57.61, -25.31]] };
-  const itinerary = (hex: string, destino: string) => ({ ruta_hex: hex, ruta_linea: "41", sentido: "ida", origen: "LAMBARÉ", destino, vigente: true, geojson: line });
+  const itinerary = (hex: string, destino: string) => ({ ruta_hex: hex, ruta_linea: "41", sentido: "ida", origen: "LAMBARÉ", destino, vigente: true, eot_nombre: "LINCE SRL", geojson: line });
   const stubVmt = (routes: Record<string, () => Response | Promise<Response>>) =>
     vi.stubGlobal("fetch", async (url: string) => {
       const route = routes[url.replace(VMT, "")];
@@ -396,6 +396,36 @@ describe("recorridos de colectivos", () => {
     stubVmt({ "/empresas": () => ok([{ cod_catalogo: 22 }]), "/itinerarios?cod_catalogo=22": () => new Response("", { status: 503 }) });
     await expect(syncBusRoutes()).rejects.toThrow("ningún recorrido");
     expect(await getBusRoute(22, "00d2")).not.toBeNull();
+  });
+
+  it("lista todos los recorridos simplificados para el catálogo, con el sentido de los vértices intacto", async () => {
+    const { syncBusRoutes, listBusRoutes } = await import("../src/bus-routes");
+    // Un vértice en línea recta sobra; un desvío de ~11 m (0.0001°) no se pierde.
+    const straight = { type: "LineString", coordinates: [[-57.6123456, -25.3], [-57.605, -25.3], [-57.6, -25.3]] };
+    const detour = { type: "LineString", coordinates: [[-57.6, -25.3], [-57.605, -25.3001], [-57.61, -25.3]] };
+    const parts = { type: "MultiLineString", coordinates: [[[-57.6, -25.3], [-57.61, -25.3]], [[-57.62, -25.3], [-57.63, -25.3]]] };
+    // La empresa 8 falla y conserva sus recorridos: los tests del histórico la cuentan entre las conocidas.
+    stubVmt({
+      "/empresas": () => ok([{ cod_catalogo: 22 }, { cod_catalogo: 8 }]),
+      "/itinerarios?cod_catalogo=8": () => new Response("", { status: 503 }),
+      "/itinerarios?cod_catalogo=22": () => ok([
+        { ...itinerary("00B1", "ASUNCIÓN"), geojson: straight },
+        { ...itinerary("00b2", "ASUNCIÓN"), geojson: detour },
+        { ...itinerary("00b3", "LUQUE"), geojson: parts, ruta_linea: null, sentido: null, eot_nombre: null },
+      ]),
+    });
+    await syncBusRoutes();
+    const all = await listBusRoutes();
+    expect(all.map((f) => f.properties.company)).toEqual([...all.map((f) => f.properties.company)].sort((a, b) => a - b));
+    const features = all.filter((f) => f.properties.company === 22);
+    expect(features.map((f) => f.properties.route)).toEqual(["00b1", "00b2", "00b3"]);
+    expect(features[0]).toEqual({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [[-57.61235, -25.3], [-57.6, -25.3]] },
+      properties: { company: 22, companyName: "LINCE SRL", route: "00b1", line: "41", direction: "ida", from: "LAMBARÉ", to: "ASUNCIÓN" },
+    });
+    expect(features[1].geometry.coordinates).toEqual(detour.coordinates);
+    expect(features[2]).toMatchObject({ geometry: parts, properties: { companyName: null, line: null, direction: null } });
   });
 });
 

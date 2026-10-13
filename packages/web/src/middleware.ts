@@ -7,6 +7,8 @@ import { config } from "./lib/server/config";
 const PUBLIC_CACHEABLE = [
   /^\/tiles\//, /^\/sitemap/, /^\/robots\.txt$/, /^\/api\/stats\//, /^\/api\/categories/, /^\/api\/areas$/,
   /^\/api\/locate$/, /^\/api\/reports(\/nearby)?$/,
+  // Colectivos en vivo y recorridos: iguales para todos y pedidos sin cookies (ver lib/client/live-buses.ts).
+  /^\/api\/buses(\/routes?)?$/,
 ];
 
 /**

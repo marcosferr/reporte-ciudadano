@@ -1,5 +1,7 @@
 /** Posición de los colectivos del área metropolitana, del prototipo del VMT (ver @rc/core/vmt). */
+import { listBusRoutes } from "@rc/core/bus-routes";
 import { vmt, type VmtBus, type VmtCompany } from "@rc/core/vmt";
+import { createHash } from "node:crypto";
 
 // Un bus que no reportó en este tiempo está apagado o fuera de servicio.
 const STALE_MS = 2 * 60 * 1000;
@@ -28,7 +30,7 @@ export interface BusFeature {
  * Memoriza `load(key)` durante `ttl` ms. Pedidos simultáneos comparten la misma promesa (un solo pedido al VMT
  * por instancia, por más usuarios que miren el mapa) y una falla no queda guardada.
  */
-function cached<K, T>(ttl: number, load: (key: K) => Promise<T>): (key: K) => Promise<T> {
+export function cached<K, T>(ttl: number, load: (key: K) => Promise<T>): (key: K) => Promise<T> {
   const entries = new Map<K, { at: number; value: Promise<T> }>();
   return (key) => {
     const hit = entries.get(key);
@@ -62,7 +64,7 @@ export function toFeature(b: CompanyBus): BusFeature {
     properties: {
       id: b.id_bus, line: b.linea_label, company: b.eot_nombre, companyCode: b.company_code,
       route: b.route_id && b.route_id !== NO_ROUTE ? b.route_id : null, ramp: b.tiene_rampa === true,
-      speed: b.velocidad, at: b.fecha_hora, ...(h === undefined ? {} : { heading: h }),
+      speed: b.velocidad, at: new Date(b.fecha_hora).toISOString(), ...(h === undefined ? {} : { heading: h }),
     },
   };
 }
@@ -71,9 +73,11 @@ export function toFeature(b: CompanyBus): BusFeature {
 export function liveBuses(rows: CompanyBus[], now = Date.now()): BusFeature[] {
   const latest = new Map<number, CompanyBus>();
   for (const b of rows) {
-    if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || now - Date.parse(b.fecha_hora) > STALE_MS) continue;
+    // Una fecha que no se entiende no es un reporte reciente (`now - NaN > STALE_MS` daría falso).
+    const at = Date.parse(b.fecha_hora);
+    if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || !Number.isFinite(at) || now - at > STALE_MS) continue;
     const prev = latest.get(b.id_bus);
-    if (!prev || Date.parse(b.fecha_hora) > Date.parse(prev.fecha_hora)) latest.set(b.id_bus, b);
+    if (!prev || at > Date.parse(prev.fecha_hora)) latest.set(b.id_bus, b);
   }
   return [...latest.values()].map(toFeature);
 }
@@ -92,3 +96,13 @@ async function fetchBuses(): Promise<BusFeature[]> {
 const buses = cached(BUSES_TTL_MS, fetchBuses);
 export const currentBuses = () => buses(null);
 
+/**
+ * Catálogo de todos los recorridos (ver @rc/core/bus-catalog), armado una vez por hora por instancia: la consulta
+ * simplifica 240 mil vértices. `version` cambia cuando cambia cualquier recorrido.
+ */
+const catalog = cached(HOUR_MS, async () => {
+  const features = await listBusRoutes();
+  const version = createHash("sha256").update(JSON.stringify(features)).digest("base64url").slice(0, 12);
+  return { body: JSON.stringify({ type: "FeatureCollection", version, features }), etag: `"${version}"` };
+});
+export const routesCatalog = () => catalog(null);

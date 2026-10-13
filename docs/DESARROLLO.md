@@ -111,6 +111,8 @@ Desde la raíz:
 | `pnpm db:migrate` | Aplica migraciones pendientes |
 | `pnpm db:seed [-- --demo]` | Carga áreas administrativas (y reportes de ejemplo) |
 | `pnpm db:bus-routes` | Carga los recorridos de los colectivos desde el VMT |
+| `pnpm --filter @rc/core backtest:prepare <csv>` | Prepara el histórico del billetaje para el backtesting de ¿Cuándo salgo? |
+| `pnpm --filter @rc/core backtest:run` | Corre el backtesting y deja un reporte en `data/backtest/` |
 | `pnpm test` | Tests de dominio y GIS (`packages/core`) contra PostGIS |
 | `pnpm --filter @rc/functions test` | Tests de las Lambdas (imágenes, correos) |
 | `pnpm --filter @rc/web test` | Tests de la web (respuestas a través del adaptador de Lambda) |
@@ -139,6 +141,48 @@ Qué cubren:
 - **web**: que los tiles MVT lleguen intactos a través del adaptador de Lambda (`astro-sst` solo codifica en base64 los tipos que reconoce como binarios; el resto lo manda como texto y corrompe los bytes).
 
 El CI corre exactamente estos cuatro comandos en cada pull request.
+
+## Backtesting de ¿Cuándo salgo?
+
+El cálculo de `/cuando-salgo` (`packages/core/src/departure.ts`) se prueba contra lo que pasó de verdad: se simula a alguien que abre la app en una parada a cierta hora, con las posiciones que se conocían hasta ese momento, y se compara con cuándo pasó cada bus. Las constantes de `CFG` salen de acá.
+
+Todo queda en `data/backtest/` (en `.gitignore`). **No subas esos datos a ningún lado.**
+
+Hace falta el catálogo de recorridos en la base local (`pnpm db:migrate && pnpm db:bus-routes`); la primera corrida lo guarda en `data/backtest/catalog.json`.
+
+**Con nuestro histórico del VMT** (una posición por minuto desde que corre `VmtCollector`, ver [HISTORICO_VMT.md](HISTORICO_VMT.md)):
+
+```bash
+aws s3 sync s3://<bucket Media>/vmt/positions/ data/backtest/vmt/ --exclude "*" --include "date=2026-10-1*"
+pnpm --filter @rc/core backtest:run -- --source vmt --days 7 --stops 60
+```
+
+**Con el billetaje electrónico del VMT** (enero de 2022 a marzo de 2023, los "8 CDs" que reúne [monda-guasu](https://github.com/luchobenitez/monda-guasu)). Cada validación es un bus detenido en una parada real, así que sirve para probar en paradas donde de verdad sube gente:
+
+1. Bajá a mano uno o dos meses de CSV de la carpeta de Drive a `data/backtest/raw/`.
+2. Preparalos. **Cada fila trae `serialtarjeta`, el hash de la tarjeta de un pasajero**: el script lo descarta al leer, junto con el monto y el producto, y solo guarda validador, hora, lugar y recorrido.
+
+   ```bash
+   pnpm --filter @rc/core backtest:prepare data/backtest/raw/*.csv
+   rm -r data/backtest/raw       # los CSV crudos no hacen falta más
+   ```
+
+3. Corré el backtesting:
+
+   ```bash
+   pnpm --filter @rc/core backtest:run -- --source billetaje --days 7 --stops 40
+   ```
+
+La simulación corre el mismo código que el teléfono, con la página abierta (una consulta cada 10 s, `--poll`), y solo compara llegadas que los datos alcanzan a cubrir (si no, quedarían solo los buses rápidos). El reporte (`data/backtest/report-*.md`) trae:
+
+- el error de la llegada estimada según cuánto faltaba;
+- cuántas veces el bus pasó dentro del rango y cuántas antes de lo más temprano;
+- **qué porcentaje de colectivos se pierde siguiendo el consejo** (meta: menos del 5 %), saliendo cuando suena el aviso o mirando una sola vez;
+- los `FACTORS` y la velocidad comercial (`DEFAULT_KMH`) sugeridos.
+
+Si cambiás `CFG`, poné el reporte en la descripción del PR. Con pocos datos (una hora) las caminatas largas casi no se pueden evaluar: lo más tarde estimado cae fuera de los datos.
+
+Para juntar una muestra del VMT sin AWS se puede correr `collectBuses` y `DayCompactor` de `@rc/core/vmt-history` en un loop (una consulta cada 30 s) y guardar el Parquet en `data/backtest/vmt/date=AAAA-MM-DD/positions.parquet`.
 
 ## Migraciones
 

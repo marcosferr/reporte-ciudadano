@@ -9,6 +9,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "bus-routes": "tsx scripts/sync-bus-routes.ts",
+    "backtest:prepare": "tsx scripts/backtest/prepare-billetaje.ts",
+    "backtest:run": "tsx scripts/backtest/run.ts",
     "test": "vitest run",
     "typecheck": "tsc -p ."
   },

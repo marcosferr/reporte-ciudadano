@@ -1,8 +1,8 @@
 /** Hacia dónde va cada colectivo, para la flecha de su ícono en el mapa (ver buses.ts). */
+import { bearing, distanceM } from "@rc/core/geo";
 
 // Un bus que se movió menos que esto entre dos pedidos está detenido o es ruido del GPS.
 const MIN_MOVE_M = 15;
-const M_PER_DEG = 111_320;
 
 export interface Track { at: [number, number]; heading?: number }
 
@@ -19,19 +19,4 @@ export function trackHeadings(prev: ReadonlyMap<number, Track>, buses: { id: num
     next.set(b.id, { at: b.at, heading: b.heading ?? moved ?? p?.heading });
   }
   return next;
-}
-
-// En los pocos metros entre dos reportes alcanza con aproximar la Tierra como plana.
-function delta([x1, y1]: [number, number], [x2, y2]: [number, number]) {
-  return { dx: (x2 - x1) * Math.cos((y1 * Math.PI) / 180), dy: y2 - y1 };
-}
-
-function distanceM(a: [number, number], b: [number, number]): number {
-  const { dx, dy } = delta(a, b);
-  return Math.hypot(dx, dy) * M_PER_DEG;
-}
-
-function bearing(a: [number, number], b: [number, number]): number {
-  const { dx, dy } = delta(a, b);
-  return ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
 }
