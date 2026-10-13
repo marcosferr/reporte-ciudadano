@@ -1,0 +1,14 @@
+---
+import WhenToLeave from "../components/islands/WhenToLeave";
+import Base from "../layouts/Base.astro";
+---
+<Base title="¿Cuándo salgo?" description="Calculá cuándo salir para alcanzar tu colectivo, contando lo que tardás en llegar a la parada. Todo se calcula en tu teléfono.">
+  <div class="mx-auto max-w-xl space-y-4 px-4 py-6">
+    <div>
+      <p class="text-sm font-semibold text-accent">Colectivos</p>
+      <h1 class="text-3xl font-extrabold">¿Cuándo salgo?</h1>
+    </div>
+    <div><WhenToLeave client:only="react" /></div>
+    <p class="text-xs text-fg-subtle">Posición de los colectivos y recorridos: prototipo del VMT/MOPC. Es una estimación: el colectivo puede adelantarse o atrasarse.</p>
+  </div>
+</Base>

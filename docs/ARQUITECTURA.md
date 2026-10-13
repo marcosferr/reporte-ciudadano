@@ -59,6 +59,8 @@ Se exporta por archivo (`@rc/core/reports`, `@rc/core/stats`…), sin barril.
 | `stats.ts` | Resumen, conteos por área, serie temporal, puntos críticos (DBSCAN) y exportación GeoJSON/CSV |
 | `ratelimit.ts` | Límite por ventana fija guardado en Postgres |
 | `users.ts` | Ciudad del usuario para centrar el mapa |
+| `vmt.ts`, `bus-routes.ts`, `vmt-history.ts` | Cliente del prototipo del VMT, recorridos de los colectivos (`bus_routes` y el catálogo de `/api/buses/routes`) e histórico |
+| `geo.ts`, `bus-catalog.ts`, `departure.ts` | ¿Cuándo salgo?: geometría plana, líneas que pasan por una parada y cuándo salir. Son puros (no importan `db.ts`): los usan el navegador y el backtesting (`scripts/backtest/`) |
 
 Los errores de negocio se lanzan como `DomainError(code, message, status)`; la web los traduce a respuestas JSON.
 
@@ -88,7 +90,7 @@ src/pages/            rutas (Astro y endpoints .ts)
   admin/              panel (requiere grupo admin o moderador)
 src/components/islands/  componentes React hidratados en el cliente
 src/lib/server/       solo servidor: auth, Cognito, config, servicios AWS, helpers HTTP
-src/lib/client/       solo navegador: API, mapa, imágenes, cola offline
+src/lib/client/       solo navegador: API, mapa, imágenes, cola offline, colectivos y ¿Cuándo salgo?
 src/middleware.ts     sesión y protección CSRF
 public/sw.js          service worker
 ```
@@ -183,6 +185,32 @@ Aparte del estado, cada reporte tiene **visibilidad**: `published`, `pending` o 
 - **Áreas**: un trigger en `reports` asigna `dept_id` y `district_id` con `ST_Intersects` al insertar. `admin_areas.geom_simple` es una columna generada con la geometría simplificada para coropléticos rápidos.
 - **Consultas GIS** (`/estadisticas`): el usuario dibuja un polígono (terra-draw) y `stats.ts` filtra con `ST_Intersects`. Los puntos críticos usan `ST_ClusterDBSCAN`.
 - **Datos abiertos**: `/api/stats/export.geojson` y `.csv`, con CORS abierto para lectura.
+
+### ¿Cuándo salgo? (colectivos)
+
+`/cuando-salgo` le dice a una persona cuándo salir para alcanzar el próximo colectivo en su parada, contando lo que tarda en llegar caminando. **Todo se calcula en el teléfono**: el servidor no recibe la parada, las líneas elegidas, la ubicación ni los minutos de caminata.
+
+```mermaid
+sequenceDiagram
+    participant T as Teléfono
+    participant CF as CloudFront
+    participant W as Web (Lambda)
+    T->>CF: GET /api/buses/routes (1 vez por día, sin cookies)
+    CF-->>T: todos los recorridos simplificados (~130 KB)
+    Note over T: marca la parada y las líneas (bus-catalog.ts), guarda en localStorage
+    loop cada 10 s, sin cookies ni Referer
+        T->>CF: GET /api/buses
+        CF->>W: (como mucho 1 cada 10 s)
+        CF-->>T: todos los buses del área metropolitana
+        Note over T: sigue a los de sus líneas y estima la llegada (departure.ts)
+    end
+    Note over T: "Salí en 6 min" · aviso local (notificación, vibración)
+```
+
+- **Los pedidos son iguales para todos**: catálogo entero y todos los buses, sin parámetros, con `credentials: "omit"` y `referrerPolicy: "no-referrer"` (`lib/client/live-buses.ts`). Las dos rutas están en `PUBLIC_CACHEABLE`. En la página no se piden tiles de reportes ni `/api/locate`, y la vista diaria no muestra mapa (los tiles de OpenFreeMap dirían la zona).
+- **Paradas**: el VMT no las publica. La persona marca la suya y `stopOptions` agrupa los recorridos que pasan a menos de 50 m por empresa, línea, destino y sentido (las 15 variantes del 38 hacia Asunción son una opción).
+- **Llegada**: cada bus se ubica sobre su recorrido y se sigue entre consultas; la velocidad sale de su avance, de los otros buses de la línea o de un valor por defecto. La llegada es un rango y el consejo usa lo más temprano, para perder el colectivo lo menos posible. Las constantes (`CFG`) se calibran con el backtesting contra el histórico (ver [DESARROLLO.md](DESARROLLO.md#backtesting-de-cuándo-salgo)).
+- **Aviso**: local, sin push (el servidor tendría que saber el horario). Notificación del service worker, vibración, sonido y la pantalla prendida mientras espera; funciona con la página abierta. Suena solo con "Salí ya" y por buses con confianza media o alta: en el backtesting, salir con "capaz lo alcanzás" perdía el colectivo la mitad de las veces.
 
 ## Modelo de datos
 

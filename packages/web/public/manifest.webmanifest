@@ -24,6 +24,7 @@
   ],
   "shortcuts": [
     { "name": "Reportar", "url": "/reportar", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Mis casos", "url": "/mis-reportes", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Mis casos", "url": "/mis-reportes", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "¿Cuándo salgo?", "url": "/cuando-salgo", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

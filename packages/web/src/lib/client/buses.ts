@@ -1,6 +1,9 @@
 import { Popup, type ExpressionSpecification, type GeoJSONSource, type Map as MLMap, type MapLayerMouseEvent } from "maplibre-gl";
 import { timeAgo } from "../format";
 import { trackHeadings, type Track } from "./bus-heading";
+import { LINE_COLORS, lineColor, NO_LINE_COLOR } from "./line-color";
+import { capitalize } from "./transit-format";
+import { fetchLiveBuses, PRIVATE_FETCH, REFRESH_MS, startPolling } from "./live-buses";
 
 /** Un colectivo como lo devuelve /api/buses (ver lib/server/buses.ts). */
 interface BusProps {
@@ -11,29 +14,17 @@ interface BusProps {
 interface Bus { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: BusProps & { color: string } }
 interface Route { type: "Feature"; geometry: GeoJSON.Geometry; properties: { line: string | null; direction: string | null; from: string | null; to: string | null } }
 
-const REFRESH_MS = 10_000;
 // Cada bus avanza de a poco hasta su última posición durante todo el intervalo, así el mapa se ve en movimiento
 // sin pedir datos más seguido (los buses reportan cada ~10 s). Se redibuja ~12 veces por segundo, no en cada frame.
 const GLIDE_MS = REFRESH_MS;
 const GLIDE_FRAME_MS = 80;
 // Un salto más largo que esto (~1 km) no se anima: el bus estuvo sin señal.
 const MAX_GLIDE_DEG = 0.01;
-const NO_LINE_COLOR = "#495057";
-// Como en Google Maps, cada línea tiene su color, y el mismo número de línea cae siempre en el mismo.
-const LINE_COLORS = ["#d6336c", "#1971c2", "#2b8a3e", "#e8590c", "#7048e8", "#0c8599", "#c2255c", "#5c940d", "#9c36b5", "#1864ab", "#d9480f", "#087f5b"];
-
 // Ícono "directions_bus" de Material Icons (Google, Apache-2.0), el mismo dibujo de colectivo que usa Google Maps.
 const BUS_PATH = "M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z";
 // Íconos al doble de resolución (pixelRatio 2). El de rumbo comparte centro con el del bus y asoma por encima.
 const BUS_SIZE = 56, HEADING_SIZE = 116, BADGE_SIZE = 26;
 const BUS_LAYERS = ["bus-dots", "bus-heading", "bus-points", "bus-ramp", "bus-labels", "bus-route", "bus-route-arrows"];
-
-export function lineColor(line: string | null): string {
-  if (!line) return NO_LINE_COLOR;
-  let h = 0;
-  for (const ch of line.split(" - ")[0]) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return LINE_COLORS[h % LINE_COLORS.length];
-}
 
 function canvas(size: number) {
   const ctx = document.createElement("canvas").getContext("2d")!;
@@ -94,7 +85,7 @@ function rampIcon(): ImageData {
 }
 
 /** Chevron blanco que marca el sentido a lo largo del recorrido. */
-function chevronIcon(): ImageData {
+export function chevronIcon(): ImageData {
   const ctx = canvas(20);
   ctx.beginPath();
   ctx.moveTo(6, 4);
@@ -167,8 +158,7 @@ function addLayers(map: MLMap) {
 export function busLayer(map: MLMap) {
   addLayers(map);
   let on = false;
-  let timer: ReturnType<typeof setInterval> | undefined;
-  let ctrl: AbortController | undefined;
+  let polling: ReturnType<typeof startPolling> | undefined;
   let frame = 0;
   let shown: Bus[] = [];
   let tracks = new Map<number, Track>();
@@ -207,22 +197,14 @@ export function busLayer(map: MLMap) {
     frame = requestAnimationFrame(step);
   }
 
-  async function load() {
-    if (document.visibilityState !== "visible") return;
-    ctrl?.abort();
-    ctrl = new AbortController();
-    try {
-      const res = await fetch("/api/buses", { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = (await res.json()) as { features: { type: "Feature"; geometry: Bus["geometry"]; properties: BusProps }[] };
-      tracks = trackHeadings(tracks, data.features.map((f) => ({ id: f.properties.id, at: f.geometry.coordinates, heading: f.properties.heading })));
-      glide(data.features.map((f) => {
-        const heading = tracks.get(f.properties.id)?.heading;
-        return { ...f, properties: { ...f.properties, color: lineColor(f.properties.line), ...(heading === undefined ? {} : { heading }) } };
-      }));
-    } catch {
-      /* sin conexión o cancelado: queda la última posición */
-    }
+  async function load(signal: AbortSignal) {
+    const data = await fetchLiveBuses(signal);
+    if (!data) return;
+    tracks = trackHeadings(tracks, data.features.map((f) => ({ id: f.properties.id, at: f.geometry.coordinates, heading: f.properties.heading })));
+    glide(data.features.map((f) => {
+      const heading = tracks.get(f.properties.id)?.heading;
+      return { ...f, properties: { ...f.properties, color: lineColor(f.properties.line), ...(heading === undefined ? {} : { heading }) } };
+    }));
   }
 
   /** Resalta el bus elegido (los demás quedan tenues) o, sin elegido, los muestra a todos igual. */
@@ -251,7 +233,8 @@ export function busLayer(map: MLMap) {
     source("bus-route")?.setData({ type: "FeatureCollection", features: [] });
     if (!p.route) return;
     try {
-      const res = await fetch(`/api/buses/route?${new URLSearchParams({ company: String(p.companyCode), route: p.route })}`);
+      // Sin cookies ni Referer: el servidor no puede asociar el recorrido consultado con quién lo pidió.
+      const res = await fetch(`/api/buses/route?${new URLSearchParams({ company: String(p.companyCode), route: p.route })}`, PRIVATE_FETCH);
       if (selected?.popup !== popup) return;
       if (res.status === 404) content.setRoute(null);
       if (!res.ok) return;
@@ -281,13 +264,10 @@ export function busLayer(map: MLMap) {
       on = visible;
       for (const id of BUS_LAYERS) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
       if (on) {
-        load();
-        timer = setInterval(load, REFRESH_MS);
-        document.addEventListener("visibilitychange", load);
+        polling = startPolling(load, { intervalMs: REFRESH_MS });
       } else {
-        clearInterval(timer);
-        document.removeEventListener("visibilitychange", load);
-        ctrl?.abort();
+        polling?.stop();
+        polling = undefined;
         cancelAnimationFrame(frame);
         selected?.popup.remove();
         // Al volver a prenderla, el movimiento desde una posición vieja no dice hacia dónde va el bus.
@@ -320,6 +300,15 @@ function popupContent(p: BusProps & { color: string }) {
   meta.className = "mt-1 text-xs text-fg-subtle";
   meta.textContent = [p.ramp ? "♿ Con rampa" : null, p.speed > 0 ? `${Math.round(p.speed)} km/h` : "Detenido", timeAgo(p.at)].filter(Boolean).join(" · ");
   root.append(head, route, meta);
+  if (p.route) {
+    // La línea va en el hash, que no llega al servidor; la página lo borra apenas lo lee. El recorrido del popup se
+    // pidió sin cookies, así que el servidor tampoco puede unir esa consulta con la visita a /cuando-salgo.
+    const when = document.createElement("a");
+    when.href = `/cuando-salgo#linea=${p.companyCode}:${p.route}`;
+    when.className = "mt-2 block text-sm font-semibold text-accent";
+    when.textContent = "⏱️ ¿Cuándo salgo para esta línea? →";
+    root.append(when);
+  }
   return {
     root,
     /** `null`: el VMT no publicó el recorrido que reporta el bus. */
@@ -333,9 +322,4 @@ function popupContent(p: BusProps & { color: string }) {
       route.textContent = [ends, r.direction].filter(Boolean).join(" · ");
     },
   };
-}
-
-// El VMT escribe los lugares en mayúsculas ("LAMBARÉ").
-function capitalize(s: string): string {
-  return s.toLowerCase().replace(/(^|[\s(-])\p{L}/gu, (m) => m.toUpperCase());
 }
