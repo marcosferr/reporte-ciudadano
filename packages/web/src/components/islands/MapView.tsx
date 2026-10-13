@@ -148,19 +148,22 @@ export default function MapView({ categories, initial, home }: {
             </FilterChip>
           ))}
         </div>
-        <div className="flex gap-2">
-          <div className="pointer-events-auto inline-flex rounded-xl bg-surface p-1 shadow ring-1 ring-line">
+        <div className="pointer-events-auto flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+          <div className="inline-flex shrink-0 rounded-xl bg-surface p-1 shadow ring-1 ring-line">
             {STATUS_FILTERS.map((s) => (
               <button key={s.value} onClick={() => setStatus(s.value)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${status === s.value ? "bg-brand-600 text-white" : "text-fg-muted"}`}>
+                className={`rounded-lg px-2 py-1.5 text-xs font-semibold sm:px-3 ${status === s.value ? "bg-brand-600 text-white" : "text-fg-muted"}`}>
                 {s.label}
               </button>
             ))}
           </div>
           <button onClick={() => setBuses(!buses)} aria-pressed={buses}
-            className={`pointer-events-auto rounded-xl px-3 text-xs font-semibold shadow ring-1 ${buses ? "bg-brand-600 text-white ring-transparent" : "bg-surface text-fg-muted ring-line"}`}>
+            className={`shrink-0 whitespace-nowrap rounded-xl px-3 text-xs font-semibold shadow ring-1 ${buses ? "bg-brand-600 text-white ring-transparent" : "bg-surface text-fg-muted ring-line"}`}>
             <span aria-hidden>🚌</span> Colectivos
           </button>
+          <a href="/cuando-salgo" title="¿Cuándo salgo?" className="flex shrink-0 items-center whitespace-nowrap rounded-xl bg-surface px-3 text-xs font-semibold text-fg-muted shadow ring-1 ring-line">
+            <span aria-hidden>⏱️</span><span className="sr-only sm:not-sr-only sm:ml-1">¿Cuándo salgo?</span>
+          </a>
         </div>
       </div>
 

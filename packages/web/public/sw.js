@@ -80,3 +80,13 @@ self.addEventListener("fetch", (e) => {
     }).catch(() => caches.match(url.pathname).then((hit) => hit || caches.match("/reportar"))));
   }
 });
+
+// El aviso de ¿Cuándo salgo? (lib/client/departure-alert.ts): tocarlo vuelve a la página abierta, o la abre.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const target = new URL(e.notification.data?.url ?? "/cuando-salgo", location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+    const open = wins.find((w) => w.url.split("#")[0] === target);
+    return open ? open.focus() : self.clients.openWindow(target);
+  }));
+});
