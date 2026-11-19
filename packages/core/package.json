@@ -19,7 +19,7 @@
     "postgres": "^3.4.9",
     "sst": "4.17.1",
     "ulid": "^3.0.2",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",
